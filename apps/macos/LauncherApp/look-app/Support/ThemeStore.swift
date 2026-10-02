@@ -128,6 +128,8 @@ final class ThemeStore: ObservableObject {
                     appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.windowWidthRange)
                 case "search_bar_width", "bar_width":
                     appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.searchBarWidthRange)
+                case "search_bar_height", "bar_height":
+                    appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.searchBarHeightRange)
                 case "ui_surface_radius":
                     appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.surfaceRadiusRange)
                 case "layout":
@@ -283,6 +285,8 @@ final class ThemeStore: ObservableObject {
         ConfigFileLines.remove(&lines, key: "content_width")
         ConfigFileLines.upsert(&lines, key: "search_bar_width", value: String(format: "%.0f", settings.searchBarWidth))
         ConfigFileLines.remove(&lines, key: "bar_width")
+        ConfigFileLines.upsert(&lines, key: "search_bar_height", value: String(format: "%.0f", settings.searchBarHeight))
+        ConfigFileLines.remove(&lines, key: "bar_height")
         ConfigFileLines.upsert(&lines, key: "inner_gap", value: String(format: "%.0f", settings.innerGap))
         ConfigFileLines.upsert(&lines, key: "layout", value: settings.layout.rawValue)
         ConfigFileLines.upsert(
@@ -596,6 +600,11 @@ final class ThemeStore: ObservableObject {
                 if let parsed = Double(value),
                    AppConstants.ThemeUI.searchBarWidthRange.contains(parsed) {
                     settings.searchBarWidth = parsed
+                }
+            case "search_bar_height", "bar_height":
+                if let parsed = Double(value),
+                   AppConstants.ThemeUI.searchBarHeightRange.contains(parsed) {
+                    settings.searchBarHeight = parsed
                 }
             case "layout":
                 settings.layout = LauncherLayout(configValue: value) ?? .split
@@ -1084,6 +1093,9 @@ alias_brow=Safari|Arc|Google Chrome|Chrome|Firefox|Brave
         }
         if object["searchBarWidth"] == nil {
             object["searchBarWidth"] = object["windowWidth"] ?? ThemeSettings.default.searchBarWidth
+        }
+        if object["searchBarHeight"] == nil {
+            object["searchBarHeight"] = ThemeSettings.default.searchBarHeight
         }
         if object["runningAppsThemeTint"] == nil {
             object["runningAppsThemeTint"] = ThemeSettings.default.runningAppsThemeTint

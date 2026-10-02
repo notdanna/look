@@ -723,6 +723,7 @@ enum AppConstants {
         static let pickerWidth: CGFloat = 140
         static let windowWidthRange: ClosedRange<Double> = 500...1400
         static let searchBarWidthRange: ClosedRange<Double> = 350...1400
+        static let searchBarHeightRange: ClosedRange<Double> = 38...70
         /// Bounds shared by the slider, the config parser and the reload check,
         /// so a value the slider cannot reach is reported rather than clamped.
         static let innerGapRange: ClosedRange<Double> = 0...24

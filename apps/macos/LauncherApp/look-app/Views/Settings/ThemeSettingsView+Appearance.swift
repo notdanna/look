@@ -97,6 +97,14 @@ extension ThemeSettingsView {
                     .help("Width of the search bar in points (350–1400; default 860). Can be narrower than the content.")
 
                 LabeledSlider(
+                    title: "Search Bar Height",
+                    value: $settings.searchBarHeight,
+                    range: AppConstants.ThemeUI.searchBarHeightRange,
+                    step: 1,
+                    fractionLength: 0)
+                    .help("Height of the search bar in points (38–70; default 45).")
+
+                LabeledSlider(
                     title: "Inner Gap",
                     value: $settings.innerGap,
                     range: AppConstants.ThemeUI.innerGapRange)

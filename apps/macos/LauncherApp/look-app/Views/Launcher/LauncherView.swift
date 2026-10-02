@@ -1384,7 +1384,7 @@ struct LauncherView: View {
                             }
                         }
                     }
-                    .frame(minHeight: AppConstants.Launcher.topRowMinHeight)
+                    .frame(minHeight: CGFloat(themeStore.settings.searchBarHeight))
                 }
                 .frame(maxWidth: CGFloat(themeStore.settings.searchBarWidth))
                 .frame(maxWidth: .infinity, alignment: .center)

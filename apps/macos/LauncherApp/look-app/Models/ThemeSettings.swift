@@ -258,6 +258,10 @@ struct ThemeSettings: Codable, Equatable {
     /// Can be configured independently from `windowWidth`.
     var searchBarWidth: Double = 860
 
+    /// Height of the search bar and AI prompt bar in points (38-70; default 45).
+    /// Persisted in config under `search_bar_height` or `bar_height`.
+    var searchBarHeight: Double = 45
+
     /// i3-style inner gap (in points) inserted between the three home-screen panes
     /// - the top row (search bar + running apps), the results list and the preview.
     /// `0` keeps the classic flat layout with hairline dividers; any value > 0 turns
