@@ -21,26 +21,33 @@ enum WindowAutoScale {
     static let standardBaseWidth: CGFloat = 840
     static let standardBaseHeight: CGFloat = 560
 
+    // Dedicated settings base size - comfortably wide to fit tabs, switches, sliders and live preview without clipping
+    static let settingsBaseWidth: CGFloat = 1020
+    static let settingsBaseHeight: CGFloat = 620
+
     static var baseWidth: CGFloat {
         if AppUIState.shared.showsThemeSettings {
-            return standardBaseWidth
+            return settingsBaseWidth
         }
         return CGFloat(max(ThemeStore.shared.settings.windowWidth, ThemeStore.shared.settings.searchBarWidth))
     }
     static var baseHeight: CGFloat {
-        standardBaseHeight
+        if AppUIState.shared.showsThemeSettings {
+            return settingsBaseHeight
+        }
+        return standardBaseHeight
     }
 
     // Compact: tall enough for 6-7 rows. Mirrors COMPACT_W/H in the Linux/Windows build.
     static var compactBaseWidth: CGFloat {
         if AppUIState.shared.showsThemeSettings {
-            return standardBaseWidth
+            return settingsBaseWidth
         }
         return CGFloat(max(min(ThemeStore.shared.settings.windowWidth, 680), ThemeStore.shared.settings.searchBarWidth))
     }
     static var compactBaseHeight: CGFloat {
         if AppUIState.shared.showsThemeSettings {
-            return standardBaseHeight
+            return settingsBaseHeight
         }
         return 440
     }
@@ -61,7 +68,7 @@ enum WindowAutoScale {
     /// the search bar, so the window is always the bordered-panel size.
     static func baseSize(for layout: LauncherLayout) -> CGSize {
         if AppUIState.shared.showsThemeSettings {
-            return CGSize(width: standardBaseWidth, height: standardBaseHeight)
+            return CGSize(width: settingsBaseWidth, height: settingsBaseHeight)
         }
         switch layout {
         case .split: return CGSize(width: baseWidth, height: baseHeight)
