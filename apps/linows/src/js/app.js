@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // copyright into the right card footer.
     app.insertAdjacentHTML(
         'beforeend',
-        `<div class="hint-bar" id="hint-bar"><span id="hint-message"></span><span class="hint-bar-copy">\u00A9 2026 by <a class="hint-bar-link" href="#">Kunkka</a></span></div>`,
+        `<div class="hint-bar" id="hint-bar"><span id="hint-message"></span><span class="hint-bar-copy"></span></div>`,
     );
 
     // Load command panels into cmd-main. Each panel's template is named after
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastResults = [];
     let lastAiState = AiState.idle;
 
-    hintBar.querySelector('.hint-bar-link').addEventListener('click', (e) => {
+    hintBar.querySelector('.hint-bar-link')?.addEventListener('click', (e) => {
         e.preventDefault();
         import('./ipc.js').then(({ openPath }) => {
             openPath('https://github.com/kunkka19xx', 'browser', '');

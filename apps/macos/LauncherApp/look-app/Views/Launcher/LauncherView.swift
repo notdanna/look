@@ -1382,8 +1382,6 @@ struct LauncherView: View {
                             if !pickedKeys.isEmpty {
                                 pickedCountPill
                             }
-                            copyrightLink
-                                .padding(.trailing, Self.barCopyrightTrailingInset)
                         }
                     }
                     .frame(minHeight: AppConstants.Launcher.topRowMinHeight)
@@ -2664,10 +2662,9 @@ struct LauncherView: View {
             .background(themeStore.selectionFillColor(), in: Capsule())
     }
 
+    @ViewBuilder
     private var copyrightLink: some View {
-        Link("© 2026 by Kunkka", destination: URL(string: "https://github.com/kunkka19xx")!)
-            .font(themeStore.uiFont(size: CGFloat(max(9, themeStore.settings.fontSize - 4)), weight: .regular))
-            .foregroundStyle(themeStore.fontColor(opacityMultiplier: 0.50))
+        EmptyView()
     }
 
     private var resultsDivider: some View {
@@ -2707,15 +2704,7 @@ struct LauncherView: View {
 
     @ViewBuilder
     private var copyrightOverlay: some View {
-        // While floating the copyright moves into a card footer; on the empty-rest
-        // screen it's hidden entirely; otherwise it stays in the panel's
-        // bottom-right corner. Compact carries it in the search bar.
-        if !showsFloatingCards && !isCompactLayout && !restsAsBareBar && !isHideAppConfirmationVisible {
-            copyrightLink
-                .padding(.trailing, max(10, hintCornerClearance))
-                // Shares the hint line, as it does inside the linows hint bar.
-                .padding(.bottom, Self.hintBarBottomInset)
-        }
+        EmptyView()
     }
 
     @ViewBuilder
