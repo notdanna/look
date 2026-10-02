@@ -545,9 +545,9 @@ enum AppConstants {
             static let height: CGFloat = 580
         }
 
-        /// The header's height: the field and the 48pt strip are both shorter,
-        /// so the bar no longer changes height with the strip on or off.
-        static let topRowMinHeight: CGFloat = 54
+        /// The header's height: keeps the bar at a sleek 45pt minimum height
+        /// across search mode and AI mode.
+        static let topRowMinHeight: CGFloat = 45
 
         enum RunningAppsStrip {
             static let iconSize: CGFloat = 30

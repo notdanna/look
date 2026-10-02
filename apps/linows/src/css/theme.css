@@ -84,8 +84,8 @@
     --tile-shadow-reach: 10px;
     --icon-size: 22px;
     --input-padding-x: 12px;
-    /* With --top-row-height, the header's height: 26 + 14 * 2. */
-    --input-padding-y: 14px;
+    /* With --top-row-height, the header's height: 26 + 10 * 2 = 46px. */
+    --input-padding-y: 10px;
     /* Shared by the icon, the flex gap and the placeholder overlay. */
     --search-icon-size: 16px;
     /* Top row content height: field and running-apps icons both measure to it,
