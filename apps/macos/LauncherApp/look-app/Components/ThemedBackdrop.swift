@@ -61,7 +61,7 @@ struct ThemedBackdrop: View {
                     cornerRadius: cornerRadius,
                     tint: tintColor,
                     appearance: themeStore.themeAppearance())
-                    .opacity(clamped(frostWeight))
+                    .opacity(clamped(blurOpacityMultiplier))
             } else {
                 if showsFrost {
                     VisualEffectBlur(
