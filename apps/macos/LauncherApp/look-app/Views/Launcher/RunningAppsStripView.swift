@@ -21,8 +21,9 @@ struct RunningAppsStripView: View {
             Spacer(minLength: 0)
             iconStack
         }
-        .padding(.horizontal, Layout.verticalPadding)
-        .padding(.vertical, Layout.horizontalPadding)
+        .padding(.leading, Layout.leadingPadding)
+        .padding(.trailing, Layout.trailingPadding)
+        .padding(.vertical, Layout.verticalPadding)
         .frame(height: Layout.width)
         .frame(maxWidth: .infinity)
     }
@@ -122,18 +123,18 @@ private struct RunningAppIconItem: View {
     @ViewBuilder
     private var badge: some View {
         Text("\(shortcutNumber)")
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .font(.system(size: 8, weight: .bold, design: .rounded))
             .foregroundStyle(themeStore.fontColor())
-            .frame(width: 14, height: 14)
+            .frame(width: 12, height: 12)
             .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(themeStore.scrimColor(opacity: 0.72))
+                Circle()
+                    .fill(themeStore.scrimColor(opacity: 0.82))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .strokeBorder(themeStore.fontColor(opacityMultiplier: 0.45), lineWidth: 1)
+                Circle()
+                    .strokeBorder(themeStore.fontColor(opacityMultiplier: 0.4), lineWidth: 0.75)
             )
-            .offset(x: 5, y: -3)
+            .offset(x: 2, y: -2)
     }
 
     @ViewBuilder
