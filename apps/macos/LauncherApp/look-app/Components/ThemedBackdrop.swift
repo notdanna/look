@@ -21,9 +21,8 @@ struct ThemedBackdrop: View {
 
     /// The heaviest darkness a full slider adds over the base frost.
     private static let maxFrostScrim = 0.7
-    /// Below this no frost is drawn: the fallback material cannot fade (it
-    /// loses its blur below full alpha), so 0 means off on both paths.
-    private static let frostCutoff = 0.01
+    /// Below this no frost is drawn so 0 means off.
+    private static let frostCutoff = 0.001
 
     private var tintOpacity: Double {
         clamped(themeStore.settings.tintOpacity * themeStore.settings.blurMaterial.tintOpacityScale)
@@ -62,14 +61,16 @@ struct ThemedBackdrop: View {
                     cornerRadius: cornerRadius,
                     tint: tintColor,
                     appearance: themeStore.themeAppearance())
-                    .opacity(clamped(blurOpacityMultiplier))
+                    .opacity(clamped(frostWeight))
             } else {
                 if showsFrost {
                     VisualEffectBlur(
                         material: themeStore.settings.blurMaterial.material,
                         blendingMode: blendingMode,
-                        appearance: themeStore.themeAppearance()
+                        appearance: themeStore.themeAppearance(),
+                        alpha: CGFloat(frostWeight)
                     )
+                    .opacity(frostWeight)
 
                     themeStore.scrimColor(opacity: frostScrimOpacity)
                 }

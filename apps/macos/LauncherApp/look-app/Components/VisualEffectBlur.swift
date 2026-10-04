@@ -10,12 +10,15 @@ struct VisualEffectBlur: NSViewRepresentable {
     var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
     /// Pinned per theme: materials otherwise follow the system light/dark setting.
     var appearance: ThemeAppearance = .dark
+    var alpha: CGFloat = 1.0
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
         view.appearance = NSAppearance(named: appearance.nsAppearanceName)
+        view.alphaValue = alpha
         return view
     }
 
@@ -31,6 +34,9 @@ struct VisualEffectBlur: NSViewRepresentable {
         }
         if nsView.appearance?.name != appearance.nsAppearanceName {
             nsView.appearance = NSAppearance(named: appearance.nsAppearanceName)
+        }
+        if nsView.alphaValue != alpha {
+            nsView.alphaValue = alpha
         }
     }
 }
