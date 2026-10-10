@@ -39,14 +39,13 @@ This document tracks what `look` supports today and what is planned next.
 - quick translation with `t"...`
 - dictionary lookup panel with `tw"...`
 
-### AI answers and web suggestions (macOS, Linux, Windows)
+### AI answers and web suggestions
 
 - optional, **on by default**; toggle with `ai_enabled` in `~/.look/config` or the Settings panel
-- **answer card**: a question, an entity with no local match (e.g. `sir alex ferguson`), or an instant-answer pattern (weather/currency/crypto) shows a Spotlight-style card. Sources resolve concurrently and render as they arrive - DuckDuckGo, then Wikipedia (arithmetic no longer answers here; it has its own pinned row above the results - see Core search and launch). On macOS it falls back to a streaming on-device **Apple Intelligence** answer when no web source hits. In the knowledge-lookup view the card sits in a two-column layout with the suggestion list
+- **answer card**: a question, an entity with no local match (e.g. `sir alex ferguson`), or an instant-answer pattern (weather/currency/crypto) shows a Spotlight-style card. Sources resolve concurrently and render as they arrive - DuckDuckGo, then Wikipedia (arithmetic no longer answers here; it has its own pinned row above the results - see Core search and launch). It falls back to a streaming on-device **Apple Intelligence** answer when no web source hits. In the knowledge-lookup view the card sits in a two-column layout with the suggestion list
 - **search suggestions**: Google autocomplete rows appear under the results for plain text queries (2+ chars); `Enter` on one runs a web search, as does `Cmd+Enter` on the query
-- **model interpretation** *(macOS)*: when a natural-language query finds nothing locally, the model turns the phrasing into a *structured* file query (type, time, place) and re-searches - never a rewritten query string, never overriding results already on screen. Results say when they were interpreted, or when the search had to be relaxed to find near-misses
+- **model interpretation**: when a natural-language query finds nothing locally, the model turns the phrasing into a *structured* file query (type, time, place) and re-searches - never a rewritten query string, never overriding results already on screen. Results say when they were interpreted, or when the search had to be relaxed to find near-misses
 - **personal answers**: schedule questions ("what's on my calendar this week?") answer from your calendar itself - deterministic, instant, and never sent to a web source
-- **platform note**: the web answer card and Google suggestions run on macOS, Linux, and Windows (the latter two via the Tauri `apps/linows/` app), sharing the `look-answers` core engine. The on-device LLM (query rewrite + the Apple Intelligence answer fallback) is **macOS-only** - there is no on-device model on Linux/Windows. The `ai_enabled` key is shared so the same toggle gates web answers on Linux/Windows and both web + on-device features on macOS
 - network note: while AI is on, the answer card's web sources and the Google suggestions send the typed query to those services; the on-device model itself makes no network calls. All of it is off when `ai_enabled = false`
 
 ### AI actions and chat (macOS)
@@ -134,7 +133,7 @@ This document tracks what `look` supports today and what is planned next.
 ### Settings and runtime config
 
 - launch modes: `lookapp <mode> [term]` opens straight into a mode from a keybinding (18 modes with aliases, `lookapp clipboard`, `lookapp calc 2+2`), plus `--toggle`, `--mode`/`--query`, `--list-modes`, and `reload-config`. Parsed in `core/engine/src/modes.rs` so a name means the same thing on every platform
-- in-app settings panel (`Cmd+Shift+,`)
+- in-app settings panel (`Cmd+,`)
 - local config file: prioritizes `$XDG_CONFIG_HOME/look/config` (or `~/.config/look/config`), falling back to `~/.look/config`
 - runtime reload (`Cmd+Shift+R` / `Cmd+Shift+;`)
 - configurable independent search bar and content widths (`search_bar_width` / `bar_width`, 350-1400 points; `window_width` / `content_width`, 500-1400 points; allows a narrow search bar without squishing the results list or document preview)

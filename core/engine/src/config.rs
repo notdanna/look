@@ -245,18 +245,28 @@ impl RuntimeConfig {
             return;
         };
 
-        let home = user_home_dir();
-        for raw_line in contents.lines() {
-            let line = strip_comments(raw_line).trim();
-            if line.is_empty() {
-                continue;
+        // Parse TOML if file ends with .toml or starts/contains a section header `[`
+        let is_toml = path.to_string_lossy().ends_with(".toml") || contents.lines().any(|l| l.trim().starts_with('[') && l.trim().ends_with(']'));
+        let pairs: Vec<(String, String)> = if is_toml && let Ok(map) = crate::config_toml::toml_to_flat_map(&contents) {
+            map.into_iter().collect()
+        } else {
+            let mut list = Vec::new();
+            for raw_line in contents.lines() {
+                let line = strip_comments(raw_line).trim();
+                if line.is_empty() {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once('=') {
+                    list.push((key.trim().to_string(), value.trim().to_string()));
+                }
             }
+            list
+        };
 
-            let Some((key, value)) = line.split_once('=') else {
-                continue;
-            };
-            let key = key.trim();
-            let value = value.trim();
+        let home = user_home_dir();
+        for (key, value) in &pairs {
+            let key = key.as_str();
+            let value = value.as_str();
 
             match key {
                 LAUNCHER_HOTKEY_CONFIG_KEY => {
@@ -400,11 +410,17 @@ fn config_path() -> Option<PathBuf> {
 
 fn ensure_default_config_file(path: &Path) {
     if path.exists() {
-        append_missing_default_config_entries(path);
+        if !path.to_string_lossy().ends_with(".toml") {
+            append_missing_default_config_entries(path);
+        }
         return;
     }
 
-    let _ = std::fs::write(path, default_config_contents());
+    if path.to_string_lossy().ends_with(".toml") {
+        let _ = std::fs::write(path, crate::config_toml::default_toml_contents());
+    } else {
+        let _ = std::fs::write(path, default_config_contents());
+    }
 }
 
 fn append_missing_default_config_entries(path: &Path) {
@@ -718,28 +734,10 @@ fn default_file_scan_roots() -> Vec<String> {
         .collect()
 }
 
-#[cfg(target_os = "windows")]
-pub(crate) fn user_home_dir() -> Option<String> {
-    env::var("USERPROFILE")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            env::var("HOME")
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-        })
-}
-
-#[cfg(not(target_os = "windows"))]
 pub(crate) fn user_home_dir() -> Option<String> {
     env::var("HOME")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            env::var("USERPROFILE")
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-        })
 }
 
 /// Drops a trailing comment. `#` only starts one at the beginning of the line or after
@@ -1022,16 +1020,6 @@ mod tests {
         assert_eq!(expand_path("Documents", home), "C:\\Users\\demo\\Documents");
     }
 
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn user_home_dir_prefers_userprofile_over_home_on_windows() {
-        unsafe {
-            env::set_var("HOME", "/c/Users/posix-home");
-            env::set_var("USERPROFILE", "C:/Users/win-home");
-        }
-
-        assert_eq!(user_home_dir().as_deref(), Some("C:/Users/win-home"));
-    }
 
     #[test]
     fn skip_dir_names_from_config_are_appended_not_replaced() {

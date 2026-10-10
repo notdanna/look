@@ -163,11 +163,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         DispatchQueue.main.async {
-            if let app = notification.object as? NSApplication,
-                let window = app.windows.first(where: { $0.isVisible }) ?? app.windows.first
-            {
-                app.activate(ignoringOtherApps: true)
-                window.makeKeyAndOrderFront(nil)
+            if let app = notification.object as? NSApplication {
+                if let window = app.windows.first(where: { $0.isVisible && $0 is LauncherPanelWindow })
+                    ?? app.windows.first(where: { $0 is LauncherPanelWindow })
+                {
+                    app.activate(ignoringOtherApps: true)
+                    window.makeKeyAndOrderFront(nil)
+                }
             }
             NotificationCenter.default.post(name: .lookActivateLauncherRequested, object: nil)
         }
@@ -178,7 +180,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windows = NSApplication.shared.windows
         guard !windows.isEmpty else { return nil }
 
-        let primary = preferred ?? windows.first(where: { $0.isVisible }) ?? windows.first
+        let primary = preferred ?? windows.first(where: { $0.isVisible && $0 is LauncherPanelWindow })
+            ?? windows.first(where: { $0 is LauncherPanelWindow })
+            ?? windows.first
         guard let primary else { return nil }
 
         for window in windows where window !== primary {

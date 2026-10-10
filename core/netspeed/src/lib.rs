@@ -13,8 +13,6 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 mod endpoint {
     /// Keyless and account-free: `__down` streams `bytes` of payload, `__up`
@@ -126,14 +124,7 @@ const LATENCY_VERDICTS: &[(f64, &str)] = &[
     (500.0, "satellite, probably"),
 ];
 
-#[cfg(target_os = "windows")]
-const NULL_SINK: &str = "NUL";
-#[cfg(not(target_os = "windows"))]
 const NULL_SINK: &str = "/dev/null";
-
-// Suppress the console window when curl spawns from a GUI shell.
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// One completed measurement: raw rates alongside the text every shell prints.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -578,16 +569,7 @@ fn measuring_curl(timeout_secs: u32, write_out: &str) -> Command {
 }
 
 fn curl_command() -> Command {
-    // Only the Linux and Windows arms below mutate it.
-    #[allow(unused_mut)]
-    let mut command = Command::new("curl");
-    // The AppImage points LD_LIBRARY_PATH at bundled Ubuntu libs, against which
-    // the system curl fails to resolve libcurl (see `look-answers`).
-    #[cfg(target_os = "linux")]
-    command.env_remove("LD_LIBRARY_PATH");
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
-    command
+    Command::new("curl")
 }
 
 /// Reads `http_code speed` from `--write-out`. The status has to be checked:

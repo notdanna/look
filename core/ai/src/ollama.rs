@@ -5,10 +5,7 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 
 /// POSTs `body` as JSON to `url`, returning the raw response body, or None on
 /// any failure (spawn error, non-2xx, non-UTF-8). `timeout_secs` caps it.
@@ -31,8 +28,7 @@ pub fn post_json(url: &str, body: &str, timeout_secs: u32) -> Option<String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
+
 
     let mut child = command.spawn().ok()?;
     let write_ok = child

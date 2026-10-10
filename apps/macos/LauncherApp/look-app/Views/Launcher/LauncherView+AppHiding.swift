@@ -5,7 +5,7 @@ extension LauncherView {
     /// False when another screen owns the launcher, so the caller can leave the
     /// key alone instead of swallowing it into a no-op.
     func hideSelectedApp() -> Bool {
-        guard !isCommandMode, !appUIState.showsThemeSettings, !showsHelpScreen else { return false }
+        guard !isCommandMode, !showsHelpScreen else { return false }
         guard pendingEmptyTrashCount == nil else { return false }
 
         guard let selectedResultID,
@@ -63,13 +63,7 @@ extension LauncherView {
         let trimmedName = appName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return .writeFailed }
 
-        let path = URL(fileURLWithPath: ConfigPathResolver.resolvedPath())
-        guard let raw = try? String(contentsOf: path, encoding: .utf8) else {
-            return .writeFailed
-        }
-
-        var lines = ConfigFileLines.parse(raw)
-        let values = ConfigFileLines.keyValues(raw)
+        let values = ConfigPathResolver.loadFlatConfig()
         var names = ConfigFileLines.parseList(values[Self.appExcludeNamesKey] ?? "")
 
         // Normalised, or `Safari`, `safari`, and `Safari.app` pile up as three
@@ -80,18 +74,13 @@ extension LauncherView {
         }
 
         names.append(trimmedName)
-        ConfigFileLines.upsert(
-            &lines,
-            key: Self.appExcludeNamesKey,
-            value: ConfigFileLines.renderList(names)
+        let formattedValue = "[" + names.map { "\"\($0)\"" }.joined(separator: ", ") + "]"
+        let ok = ConfigPathResolver.setConfigValue(
+            section: "indexing.apps",
+            key: "exclude_names",
+            rawValue: formattedValue
         )
-
-        do {
-            try ConfigFileLines.render(lines).write(to: path, atomically: true, encoding: .utf8)
-            return .added
-        } catch {
-            return .writeFailed
-        }
+        return ok ? .added : .writeFailed
     }
 
     /// Mirrors `normalize_app_name` in `core/engine/src/platform/macos/apps.rs`.

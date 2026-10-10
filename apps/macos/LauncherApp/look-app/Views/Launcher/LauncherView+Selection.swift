@@ -33,8 +33,6 @@ extension LauncherView {
         shouldAutocompleteCommand: Bool = false,
         preferCommandListInCommandMode: Bool = false
     ) {
-        guard !appUIState.showsThemeSettings else { return }
-
         // The `@`-mention popup owns the highlight while it is open, so Tab
         // reaches into the file list instead of the results behind it.
         if direction == .down || direction == .up,
@@ -182,7 +180,6 @@ extension LauncherView {
     }
 
     func startKeyboardNavigationIfNeeded() {
-        guard !appUIState.showsThemeSettings else { return }
         keyboardMonitor.start(
             onNext: {
                 moveSelection(.down, shouldAutocompleteCommand: true, preferCommandListInCommandMode: true)
@@ -311,7 +308,6 @@ extension LauncherView {
             },
             onRequestDelete: { [self] in
                 guard DeleteTargetLogic.allowsKeyboardDelete(
-                    showsThemeSettings: appUIState.showsThemeSettings,
                     showsHelpScreen: showsHelpScreen
                 ) else { return }
                 // In AI mode ⌘D belongs to the sessions list and nothing else:

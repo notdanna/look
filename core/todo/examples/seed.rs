@@ -156,33 +156,11 @@ fn app_db_path() -> PathBuf {
 
     let home = || std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
 
-    #[cfg(target_os = "windows")]
-    if let Ok(base) = std::env::var("LOCALAPPDATA")
-        && !base.trim().is_empty()
-    {
-        return PathBuf::from(base.trim()).join("look").join("look.db");
-    }
-
-    #[cfg(target_os = "macos")]
-    return PathBuf::from(home())
+    PathBuf::from(home())
         .join("Library")
         .join("Application Support")
         .join("look")
-        .join("look.db");
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        if let Ok(data_home) = std::env::var("XDG_DATA_HOME")
-            && !data_home.trim().is_empty()
-        {
-            return PathBuf::from(data_home.trim()).join("look").join("look.db");
-        }
-        PathBuf::from(home())
-            .join(".local")
-            .join("share")
-            .join("look")
-            .join("look.db")
-    }
+        .join("look.db")
 }
 
 // Tiny xorshift so the example needs no rand dependency.

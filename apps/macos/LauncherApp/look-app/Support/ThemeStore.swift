@@ -80,6 +80,7 @@ final class ThemeStore: ObservableObject {
         _ = applyLaunchAtLoginSetting()
 
         refreshBackgroundImageURL()
+        startWatchingConfigFile()
     }
 
     func reset() {
@@ -97,69 +98,66 @@ final class ThemeStore: ObservableObject {
         Self.ensureDefaultConfigFileExists(at: Self.configPath())
 
         var warnings: [String] = []
-        let configPath = Self.configPath()
+        let rawValues = ConfigPathResolver.loadFlatConfig()
 
-        // First, scan raw config for invalid values before applying
-        if let raw = try? String(contentsOf: configPath, encoding: .utf8) {
-            for line in raw.split(whereSeparator: \ .isNewline) {
-                // Stripped as the apply pass strips it below: a trailing
-                // `# note` would fail to parse here and be clamped there, silently.
-                let stripped = ConfigFileLines.stripComment(String(line))
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard stripped.firstIndex(of: "=") != nil else { continue }
+        if let err = rawValues["_error"] {
+            warnings.append(err)
+        }
 
-                let parts = stripped.split(separator: "=", maxSplits: 1)
-                guard parts.count == 2 else { continue }
-                let key = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
-                let value = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
-
-                switch key {
-                case "ui_tint_red", "ui_tint_green", "ui_tint_blue", "ui_tint_opacity", "ui_font_opacity", "ui_border_opacity":
-                    if let parsed = Double(value), parsed < 0 || parsed > 1 {
-                        warnings.append("\(key)=\(value) invalid (expected 0-1)")
-                    }
-                case "ui_font_size":
-                    if let parsed = Double(value), parsed <= 0 {
-                        warnings.append("\(key)=\(value) invalid (must be > 0)")
-                    }
-                case "inner_gap":
-                    appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.innerGapRange)
-                case "window_width", "content_width":
-                    appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.windowWidthRange)
-                case "search_bar_width", "bar_width":
-                    appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.searchBarWidthRange)
-                case "search_bar_height", "bar_height":
-                    appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.searchBarHeightRange)
-                case "ui_surface_radius":
-                    appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.surfaceRadiusRange)
-                case "layout":
-                    if LauncherLayout(configValue: value) == nil {
-                        let expected = LauncherLayout.allCases.map(\.rawValue).joined(separator: " or ")
-                        warnings.append("\(key)=\(value) invalid (expected \(expected))")
-                    }
-                case "file_scan_depth":
-                    if let parsed = Int(value), parsed < AppConstants.FileScan.minDepth || parsed > AppConstants.FileScan.maxDepth {
-                        warnings.append("\(key)=\(value) invalid (must be \(AppConstants.FileScan.minDepth)-\(AppConstants.FileScan.maxDepth))")
-                    }
-                case "file_scan_limit":
-                    if let parsed = Int(value), parsed < AppConstants.FileScan.minLimit || parsed > AppConstants.FileScan.maxLimit {
-                        warnings.append("\(key)=\(value) invalid (must be \(AppConstants.FileScan.minLimit)-\(AppConstants.FileScan.maxLimit))")
-                    }
-                case "ui_background_image":
-                    if !value.isEmpty {
-                        let url = URL(fileURLWithPath: value)
-                        if !FileManager.default.fileExists(atPath: url.path) {
-                            warnings.append("background image not found: \(value)")
-                        }
-                    }
-                case "ui_theme":
-                    // Only validated here; applyThemeOverridesFromConfigFile applies it.
-                    if !value.isEmpty, BuiltinThemePreset.preset(forThemeName: value) == nil {
-                        warnings.append("theme '\(value)' not found")
-                    }
-                default:
-                    break
+        for (key, value) in rawValues {
+            switch key {
+            case "ui_tint_red", "ui_tint_green", "ui_tint_blue", "ui_tint_opacity", "ui_font_opacity", "ui_border_opacity", "border_opacity":
+                if let parsed = Double(value), parsed < 0 || parsed > 1 {
+                    warnings.append("\(key)=\(value) invalid (expected 0-1)")
                 }
+            case "ui_border_red", "border_red", "ui_border_green", "border_green", "ui_border_blue", "border_blue":
+                if let parsed = Double(value), parsed < 0 || parsed > 1 {
+                    warnings.append("\(key)=\(value) invalid (expected 0-1)")
+                }
+            case "ui_border_thickness", "ui_border_width", "border_width", "border_thickness":
+                if let parsed = Double(value), parsed < 0 {
+                    warnings.append("\(key)=\(value) invalid (expected >= 0)")
+                }
+            case "ui_font_size":
+                if let parsed = Double(value), parsed <= 0 {
+                    warnings.append("\(key)=\(value) invalid (must be > 0)")
+                }
+            case "inner_gap":
+                appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.innerGapRange)
+            case "window_width", "content_width":
+                appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.windowWidthRange)
+            case "search_bar_width", "bar_width":
+                appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.searchBarWidthRange)
+            case "search_bar_height", "bar_height":
+                appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.searchBarHeightRange)
+            case "ui_surface_radius":
+                appendRangeWarning(&warnings, key: key, value: value, range: AppConstants.ThemeUI.surfaceRadiusRange)
+            case "layout":
+                if LauncherLayout(configValue: value) == nil {
+                    let expected = LauncherLayout.allCases.map(\.rawValue).joined(separator: " or ")
+                    warnings.append("\(key)=\(value) invalid (expected \(expected))")
+                }
+            case "file_scan_depth":
+                if let parsed = Int(value), parsed < AppConstants.FileScan.minDepth || parsed > AppConstants.FileScan.maxDepth {
+                    warnings.append("\(key)=\(value) invalid (must be \(AppConstants.FileScan.minDepth)-\(AppConstants.FileScan.maxDepth))")
+                }
+            case "file_scan_limit":
+                if let parsed = Int(value), parsed < AppConstants.FileScan.minLimit || parsed > AppConstants.FileScan.maxLimit {
+                    warnings.append("\(key)=\(value) invalid (must be \(AppConstants.FileScan.minLimit)-\(AppConstants.FileScan.maxLimit))")
+                }
+            case "ui_background_image":
+                if !value.isEmpty {
+                    let url = URL(fileURLWithPath: value)
+                    if !FileManager.default.fileExists(atPath: url.path) {
+                        warnings.append("background image not found: \(value)")
+                    }
+                }
+            case "ui_theme":
+                if !value.isEmpty, BuiltinThemePreset.preset(forThemeName: value) == nil {
+                    warnings.append("theme '\(value)' not found")
+                }
+            default:
+                break
             }
         }
 
@@ -202,142 +200,6 @@ final class ThemeStore: ObservableObject {
 
         let resultTheme = detectBuiltinTheme(for: settings)
         return ConfigReloadResult(loadedTheme: resultTheme.title, warnings: warnings)
-    }
-
-    func saveCurrentConfigToFile() -> Bool {
-        let path = Self.configPath()
-        Self.ensureDefaultConfigFileExists(at: path)
-
-        // A failed read must not fall through to an empty parse. The upserts below only
-        // know this store's own keys, so saving on top of nothing would write those back
-        // and drop every other setting, comment, and blank line in the file. An
-        // unreadable config (bad permissions, not valid UTF-8) is a reason to fail the
-        // save, not to rewrite the file from scratch.
-        guard let raw = try? String(contentsOf: path, encoding: .utf8) else {
-            return false
-        }
-        var lines = ConfigFileLines.parse(raw)
-
-        ConfigFileLines.upsert(&lines, key: "ui_theme", value: savedThemeName())
-        ConfigFileLines.upsert(&lines, key: "ui_tint_red", value: String(format: "%.2f", settings.tintRed))
-        ConfigFileLines.upsert(&lines, key: "ui_tint_green", value: String(format: "%.2f", settings.tintGreen))
-        ConfigFileLines.upsert(&lines, key: "ui_tint_blue", value: String(format: "%.2f", settings.tintBlue))
-        ConfigFileLines.upsert(&lines, key: "ui_tint_opacity", value: String(format: "%.2f", settings.tintOpacity))
-        ConfigFileLines.upsert(&lines, key: "ui_blur_material", value: settings.blurMaterial.rawValue)
-        ConfigFileLines.upsert(&lines, key: "ui_blur_opacity", value: String(format: "%.2f", settings.blurOpacity))
-        ConfigFileLines.upsert(&lines, key: "ui_font_name", value: settings.fontName)
-        ConfigFileLines.upsert(&lines, key: "ui_font_size", value: String(format: "%.0f", settings.fontSize))
-        ConfigFileLines.upsert(&lines, key: "ui_font_red", value: String(format: "%.2f", settings.fontRed))
-        ConfigFileLines.upsert(&lines, key: "ui_font_green", value: String(format: "%.2f", settings.fontGreen))
-        ConfigFileLines.upsert(&lines, key: "ui_font_blue", value: String(format: "%.2f", settings.fontBlue))
-        ConfigFileLines.upsert(&lines, key: "ui_font_opacity", value: String(format: "%.2f", settings.fontOpacity))
-        ConfigFileLines.upsert(&lines, key: "ui_border_thickness", value: String(format: "%.2f", settings.borderThickness))
-        ConfigFileLines.upsert(&lines, key: "ui_border_red", value: String(format: "%.2f", settings.borderRed))
-        ConfigFileLines.upsert(&lines, key: "ui_border_green", value: String(format: "%.2f", settings.borderGreen))
-        ConfigFileLines.upsert(&lines, key: "ui_border_blue", value: String(format: "%.2f", settings.borderBlue))
-        ConfigFileLines.upsert(&lines, key: "ui_border_opacity", value: String(format: "%.2f", settings.borderOpacity))
-        ConfigFileLines.upsert(&lines, key: "file_scan_depth", value: String(settings.fileScanDepth))
-        ConfigFileLines.upsert(&lines, key: "file_scan_limit", value: String(settings.fileScanLimit))
-        ConfigFileLines.upsert(
-            &lines,
-            key: "lazy_indexing_enabled",
-            value: settings.lazyIndexingEnabled ? "true" : "false"
-        )
-        ConfigFileLines.upsert(
-            &lines,
-            key: "file_exclude_paths",
-            value: ConfigFileLines.renderList(excludedFolderPaths)
-        )
-        ConfigFileLines.upsert(
-            &lines,
-            key: "file_scan_extra_roots",
-            value: ConfigFileLines.renderList(extraFileScanRoots)
-        )
-        ConfigFileLines.upsert(&lines, key: "backend_log_level", value: settings.backendLogLevel.rawValue)
-        ConfigFileLines.upsert(&lines, key: "launch_at_login", value: settings.launchAtLogin ? "true" : "false")
-
-        for shortcut in ConfigurableShortcut.all {
-            if let spec = settings.shortcutBindings[shortcut.configKey], !spec.isEmpty {
-                ConfigFileLines.upsert(&lines, key: shortcut.configKey, value: spec)
-            }
-        }
-
-        // Background image
-        if let bgPath = settings.backgroundImagePath, !bgPath.isEmpty {
-            ConfigFileLines.upsert(&lines, key: "ui_background_image", value: bgPath)
-            ConfigFileLines.upsert(&lines, key: "ui_background_image_mode", value: settings.backgroundImageMode.rawValue)
-            ConfigFileLines.upsert(&lines, key: "ui_background_image_opacity", value: String(format: "%.2f", settings.backgroundImageOpacity))
-            ConfigFileLines.upsert(&lines, key: "ui_background_image_blur", value: String(format: "%.1f", settings.backgroundImageBlur))
-        } else {
-            ConfigFileLines.remove(&lines, key: "ui_background_image")
-            ConfigFileLines.remove(&lines, key: "ui_background_image_mode")
-            ConfigFileLines.remove(&lines, key: "ui_background_image_opacity")
-            ConfigFileLines.remove(&lines, key: "ui_background_image_blur")
-        }
-
-        // Settings blur multiplier
-        ConfigFileLines.upsert(&lines, key: "settings_blur_multiplier", value: String(format: "%.2f", settings.settingsBlurMultiplier))
-
-        // Running apps switcher
-        ConfigFileLines.upsert(&lines, key: "running_apps_placement", value: settings.runningAppsPlacement.rawValue)
-        ConfigFileLines.upsert(&lines, key: "running_apps_theme_tint", value: settings.runningAppsThemeTint ? "true" : "false")
-        ConfigFileLines.upsert(&lines, key: "window_width", value: String(format: "%.0f", settings.windowWidth))
-        ConfigFileLines.remove(&lines, key: "content_width")
-        ConfigFileLines.upsert(&lines, key: "search_bar_width", value: String(format: "%.0f", settings.searchBarWidth))
-        ConfigFileLines.remove(&lines, key: "bar_width")
-        ConfigFileLines.upsert(&lines, key: "search_bar_height", value: String(format: "%.0f", settings.searchBarHeight))
-        ConfigFileLines.remove(&lines, key: "bar_height")
-        ConfigFileLines.upsert(&lines, key: "inner_gap", value: String(format: "%.0f", settings.innerGap))
-        ConfigFileLines.upsert(&lines, key: "layout", value: settings.layout.rawValue)
-        ConfigFileLines.upsert(
-            &lines,
-            key: "ui_surface_radius",
-            value: String(format: "%.2f", settings.surfaceRadius)
-        )
-
-        // Apple Intelligence / AI features
-        ConfigFileLines.upsert(&lines, key: "ai_enabled", value: settings.aiEnabled ? "true" : "false")
-        ConfigFileLines.upsert(&lines, key: "ai_provider", value: settings.aiProvider.rawValue)
-        ConfigFileLines.upsert(&lines, key: "ollama_host", value: settings.ollamaHost)
-        ConfigFileLines.upsert(&lines, key: "ollama_model", value: settings.ollamaModel)
-        ConfigFileLines.upsert(
-            &lines, key: "ai_allow_remote_context",
-            value: settings.aiAllowRemoteContext ? "true" : "false")
-
-        // Empty-state super actions launchpad
-        ConfigFileLines.upsert(&lines, key: "super_actions_enabled", value: settings.superActionsEnabled ? "true" : "false")
-
-        ConfigFileLines.upsert(&lines, key: "animations_enabled", value: settings.animationsEnabled ? "true" : "false")
-
-        do {
-            try ConfigFileLines.render(lines).write(to: path, atomically: true, encoding: .utf8)
-            _ = applyLaunchAtLoginSetting()
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    func regenerateFreshConfigFile() -> Bool {
-        let path = Self.configPath()
-        if FileManager.default.fileExists(atPath: path.path) {
-            do {
-                try FileManager.default.removeItem(at: path)
-            } catch {
-                return false
-            }
-        }
-
-        Self.ensureDefaultConfigFileExists(at: path)
-        guard FileManager.default.fileExists(atPath: path.path) else {
-            return false
-        }
-
-        sessionLayout = nil
-        settings = .default
-        applyThemeOverridesFromConfigFile()
-        _ = applyLaunchAtLoginSetting()
-        return true
     }
 
     func zoomIn() {
@@ -478,7 +340,8 @@ final class ThemeStore: ObservableObject {
     }
 
     private func applyThemeOverridesFromConfigFile() {
-        guard let raw = try? String(contentsOf: Self.configPath(), encoding: .utf8) else {
+        let values = ConfigPathResolver.loadFlatConfig()
+        guard !values.isEmpty else {
             return
         }
 
@@ -491,28 +354,13 @@ final class ThemeStore: ObservableObject {
         extraFileScanRoots = []
         settings.shortcutBindings = [:]
 
-        // Base, not override: the ui_* keys below win. Applied last, it threw
-        // away tuned values on every load. Accepted cost: a hand-written
-        // `ui_theme` no longer beats ui_* keys already in the file.
-        if let themeValue = ConfigFileLines.keyValues(raw)["ui_theme"],
+        if let themeValue = values["ui_theme"],
            let preset = BuiltinThemePreset.preset(forThemeName: themeValue) {
             applyBuiltinTheme(preset)
         }
         var explicitSearchBarWidth = false
 
-        for line in raw.split(whereSeparator: \ .isNewline) {
-            let stripped = ConfigFileLines.stripComment(String(line)).trimmingCharacters(in: .whitespacesAndNewlines)
-            if stripped.isEmpty {
-                continue
-            }
-
-            guard let splitPoint = stripped.firstIndex(of: "=") else {
-                continue
-            }
-
-            let key = stripped[..<splitPoint].trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = stripped[stripped.index(after: splitPoint)...].trimmingCharacters(in: .whitespacesAndNewlines)
-
+        for (key, value) in values {
             switch key {
             case "ui_theme":
                 // Empty is Custom, and must clear a preset the file no longer
@@ -566,23 +414,23 @@ final class ThemeStore: ObservableObject {
                 if let parsed = parseUnitDouble(value) {
                     settings.fontOpacity = parsed
                 }
-            case "ui_border_thickness":
-                if let parsed = parsePositiveDouble(value) {
+            case "ui_border_thickness", "ui_border_width", "border_width", "border_thickness":
+                if let parsed = parseNonNegativeDouble(value) {
                     settings.borderThickness = parsed
                 }
-            case "ui_border_red":
+            case "ui_border_red", "border_red":
                 if let parsed = parseUnitDouble(value) {
                     settings.borderRed = parsed
                 }
-            case "ui_border_green":
+            case "ui_border_green", "border_green":
                 if let parsed = parseUnitDouble(value) {
                     settings.borderGreen = parsed
                 }
-            case "ui_border_blue":
+            case "ui_border_blue", "border_blue":
                 if let parsed = parseUnitDouble(value) {
                     settings.borderBlue = parsed
                 }
-            case "ui_border_opacity":
+            case "ui_border_opacity", "border_opacity":
                 if let parsed = parseUnitDouble(value) {
                     settings.borderOpacity = parsed
                 }
@@ -721,6 +569,79 @@ final class ThemeStore: ObservableObject {
         settings.uiTheme = detectBuiltinTheme(for: settings)
     }
 
+    // MARK: - Config File Access & Watcher
+
+    @MainActor
+    func openConfigFile() {
+        let url = Self.configPath()
+        Self.ensureDefaultConfigFileExists(at: url)
+        if !NSWorkspace.shared.open(url) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+
+    private var configFileWatcher: DispatchSourceFileSystemObject?
+    private var configDirWatcher: DispatchSourceFileSystemObject?
+    private var watcherDebounceItem: DispatchWorkItem?
+
+    func startWatchingConfigFile() {
+        stopWatchingConfigFile()
+        let path = Self.configPath().path
+        let dirPath = (path as NSString).deletingLastPathComponent
+
+        let dirFD = open(dirPath, O_EVTONLY)
+        if dirFD >= 0 {
+            let dirSource = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: dirFD,
+                eventMask: [.write, .extend, .attrib, .link, .rename],
+                queue: DispatchQueue.main
+            )
+            dirSource.setEventHandler { [weak self] in
+                self?.debounceReloadFromWatcher()
+            }
+            dirSource.setCancelHandler {
+                close(dirFD)
+            }
+            dirSource.resume()
+            configDirWatcher = dirSource
+        }
+
+        let fileFD = open(path, O_EVTONLY)
+        if fileFD >= 0 {
+            let fileSource = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fileFD,
+                eventMask: [.write, .extend, .attrib, .rename, .delete],
+                queue: DispatchQueue.main
+            )
+            fileSource.setEventHandler { [weak self] in
+                self?.debounceReloadFromWatcher()
+            }
+            fileSource.setCancelHandler {
+                close(fileFD)
+            }
+            fileSource.resume()
+            configFileWatcher = fileSource
+        }
+    }
+
+    private func debounceReloadFromWatcher() {
+        watcherDebounceItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.post(name: .lookReloadConfigRequested, object: nil)
+            self.startWatchingConfigFile()
+        }
+        watcherDebounceItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: item)
+    }
+
+    func stopWatchingConfigFile() {
+        configFileWatcher?.cancel()
+        configFileWatcher = nil
+        configDirWatcher?.cancel()
+        configDirWatcher = nil
+    }
+
     private static func configPath() -> URL {
         URL(fileURLWithPath: ConfigPathResolver.resolvedPath())
     }
@@ -734,18 +655,9 @@ final class ThemeStore: ObservableObject {
     /// equivalent: rewriting it would reformat a layout the user chose, and would bump
     /// the mtime and wake the config watcher on every launch.
     private static func ensureDefaultConfigFileExists(at path: URL) {
-        guard FileManager.default.fileExists(atPath: path.path) else {
-            try? defaultConfigContents.write(to: path, atomically: true, encoding: .utf8)
-            return
+        if !FileManager.default.fileExists(atPath: path.path) {
+            _ = ConfigPathResolver.loadFlatConfig()
         }
-
-        guard let raw = try? String(contentsOf: path, encoding: .utf8),
-              let repaired = ConfigFileLines.repairingLegacyDamage(raw)
-        else {
-            return
-        }
-
-        try? repaired.write(to: path, atomically: true, encoding: .utf8)
     }
 
     private func clamped(_ value: Double, to range: ClosedRange<Double>) -> Double {
@@ -780,6 +692,13 @@ final class ThemeStore: ObservableObject {
 
     private func parsePositiveDouble(_ value: String) -> Double? {
         guard let parsed = Double(value), parsed > 0 else {
+            return nil
+        }
+        return parsed
+    }
+
+    private func parseNonNegativeDouble(_ value: String) -> Double? {
+        guard let parsed = Double(value), parsed >= 0 else {
             return nil
         }
         return parsed
@@ -983,6 +902,7 @@ ui_font_red=0.96
 ui_font_green=0.96
 ui_font_blue=0.98
 ui_font_opacity=0.96
+# Border appearance: thickness (0 = no border; aliases: ui_border_width, border_width) and RGBA colors
 ui_border_thickness=1.0
 ui_border_red=1.0
 ui_border_green=1.0
@@ -998,6 +918,12 @@ window_width=860
 
 # Search bar width (points, 350-1400; default 860)
 search_bar_width=860
+
+# Search bar height (points, 38-70; default 45)
+search_bar_height=45
+
+# Global hotkey to summon Look
+launcher_hotkey=cmd+space
 
 # Inner gap (points, 0-24) between the three home panes; 0 = classic flat layout
 inner_gap=7
@@ -1139,7 +1065,7 @@ alias_brow=Safari|Arc|Google Chrome|Chrome|Firefox|Brave
         }
     }
 
-    private func applyLaunchAtLoginSetting() -> Bool {
+    func applyLaunchAtLoginSetting() -> Bool {
         if #available(macOS 13.0, *) {
             do {
                 if settings.launchAtLogin {

@@ -13,6 +13,14 @@ pub struct CurrencyQuery {
     pub to: String,
 }
 
+/// A parsed unit conversion request, e.g. `1024 mb to gb`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnitQuery {
+    pub amount: f64,
+    pub from: String,
+    pub to: String,
+}
+
 /// `$` is ambiguous in principle (CAD, AUD) but means USD to anyone typing it
 /// into a launcher unqualified.
 const CURRENCY_SIGNS: &[(&str, &str)] = &[
@@ -88,6 +96,43 @@ pub fn currency(query: &str) -> Option<CurrencyQuery> {
         amount: if amount == 0.0 { 1.0 } else { amount },
         from: currency_code(from),
         to: currency_code(&caps[5]),
+    })
+}
+
+/// Parses `<amount?> <FROM> (to|in|->|=>|=|>) <TO>` for compatible physical or data units.
+pub fn units(query: &str) -> Option<UnitQuery> {
+    const NUM: &str = r"(?:[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:[.,][0-9]+)?)";
+    const UNIT: &str = r"(?:[a-zA-Z°/]+)";
+    static SYMBOL: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(&format!(
+            r"(?i)^(?:({NUM})?\s*({UNIT})|({UNIT})\s*({NUM}))\s*(?:->|=>|→|=|>)\s*({UNIT})$"
+        ))
+        .expect("valid unit symbol regex")
+    });
+    static WORD: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(&format!(
+            r"(?i)^(?:({NUM})?\s*({UNIT})|({UNIT})\s*({NUM}))\s+(?:to|in)\s+({UNIT})$"
+        ))
+        .expect("valid unit word regex")
+    });
+    let q = query.trim();
+    let caps = SYMBOL.captures(q).or_else(|| WORD.captures(q))?;
+    let amount = caps
+        .get(1)
+        .or_else(|| caps.get(4))
+        .map(|m| parse_amount(m.as_str()))
+        .unwrap_or(1.0);
+    let from = caps.get(2).or_else(|| caps.get(3))?.as_str();
+    let to = &caps[5];
+
+    if !crate::sources::units::is_compatible(from, to) {
+        return None;
+    }
+
+    Some(UnitQuery {
+        amount: if amount == 0.0 { 1.0 } else { amount },
+        from: from.to_string(),
+        to: to.to_string(),
     })
 }
 
@@ -276,5 +321,23 @@ mod tests {
         assert_eq!(crypto("btc price").unwrap(), "bitcoin");
         assert_eq!(crypto("price of solana").unwrap(), "solana");
         assert!(crypto("solana").is_none());
+    }
+
+    #[test]
+    fn units_parsing() {
+        let q = units("1024 mb to gb").unwrap();
+        assert_eq!((q.amount, q.from.as_str(), q.to.as_str()), (1024.0, "mb", "gb"));
+
+        let q2 = units("16gb in mb").unwrap();
+        assert_eq!((q2.amount, q2.from.as_str(), q2.to.as_str()), (16.0, "gb", "mb"));
+
+        let q3 = units("100 km to miles").unwrap();
+        assert_eq!((q3.amount, q3.from.as_str(), q3.to.as_str()), (100.0, "km", "miles"));
+
+        // Incompatible units return None
+        assert!(units("100 mb to km").is_none());
+
+        // Currency is not handled as physical units
+        assert!(units("10 usd to mxn").is_none());
     }
 }

@@ -19,25 +19,12 @@ Forward-looking direction, and the pillars that are not built yet, live in
 The brain is Rust. The shell owns only what is platform-bound: the UI, the
 system stores, and execution.
 
-> **macOS is the only AI shell.** linows (the Tauri shell) has no AI surface
-> and none is being built. It appears below only to show where a second shell
-> *would* attach, because that seam is what forces the data-only boundary - not
-> as in-flight work, and not something to build for speculatively.
->
-> This is "not planned", not "refused". If you run Linux or Windows and want
-> it, open an issue; demand is what would move it. But go in knowing two things
-> that no amount of shell work fixes: the planner assumes a local model answering
-> in about a second, which leans on Apple Silicon's unified memory more than it
-> looks - the same model on a machine without a capable GPU or enough RAM may be
-> too slow to type against; and there is no unified system calendar to write to
-> on Linux, while Windows' `AppointmentStore` is heavily restricted. Chat and
-> file recall would port cleanly. Calendar acting might never reach parity.
+> **macOS is the only shell.** Look targets macOS natively with Swift and SwiftUI.
 
 ```mermaid
 flowchart TB
-    subgraph shells["shells - platform-bound"]
+    subgraph shells["shell - platform-bound"]
         SW["macOS - Swift/SwiftUI<br/>panel, EventKit, providers, executor"]
-        TA["linows - Tauri/JS<br/>no AI surface · not being built"]
     end
 
     subgraph bound["boundary - JSON in, JSON out, no closures"]

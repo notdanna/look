@@ -456,7 +456,6 @@ extension LauncherView {
     }
 
     func toggleHelpScreen() {
-        guard !appUIState.showsThemeSettings else { return }
         guard !isCommandMode else {
             showBanner(
                 AppConstants.Launcher.Help.commandModeInfoBanner,
@@ -530,7 +529,6 @@ extension LauncherView {
     /// unclaimed.
     func pasteSelectedClipboardEntry() -> Bool {
         guard ClipboardPasteTarget.allowsKeyboardPaste(
-            showsThemeSettings: appUIState.showsThemeSettings,
             showsHelpScreen: showsHelpScreen,
             inCommandMode: isCommandMode,
             inAIMode: isAIMode

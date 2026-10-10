@@ -9,11 +9,6 @@ extension LauncherView {
         recoveryDelays: [Double] = [0.0, 0.04, 0.10],
         activateApp: Bool = true
     ) {
-        if appUIState.showsThemeSettings {
-            NotificationCenter.default.post(name: .lookFocusSettingsInputRequested, object: nil)
-            return
-        }
-
         focusRequestToken &+= 1
         let token = focusRequestToken
 
@@ -24,15 +19,6 @@ extension LauncherView {
     }
 
     func activateLauncherModeAndFocus() {
-        // Preserve the Settings screen across hide/recall. Leaving Settings is an
-        // explicit action (Escape / close button -> closeSettingsPanel); recalling
-        // Look should not silently drop the user back to home. Just restore focus
-        // to the settings input (focusActiveInput routes there when in Settings).
-        if appUIState.showsThemeSettings {
-            focusActiveInput()
-            return
-        }
-
         if isCommandMode {
             pendingKillCandidate = nil
             if activeCommandAcceptsInput {
@@ -50,7 +36,6 @@ extension LauncherView {
         for delay in delays {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 guard token == focusRequestToken else { return }
-                guard !appUIState.showsThemeSettings else { return }
                 guard let window = launcherWindow() else { return }
 
                 if !window.isVisible {
@@ -87,11 +72,12 @@ extension LauncherView {
     }
 
     func launcherWindow() -> NSWindow? {
-        // The app has multiple NSWindows now (the launcher itself, the
-        // menu-bar status item button window, the pomo popover anchor).
-        // The status item / popover windows are tiny (≈16x24); the
-        // launcher's minimum frame is 620x600 (set on ContentView). Use
-        // a size threshold to filter them out.
+        let windows = NSApplication.shared.windows
+
+        if let launcher = windows.first(where: { $0 is LauncherPanelWindow }) {
+            return launcher
+        }
+
         let isLauncherSized: (NSWindow) -> Bool = { w in
             w.frame.width >= 400 && w.frame.height >= 400
         }
@@ -99,8 +85,6 @@ extension LauncherView {
         if let key = NSApplication.shared.keyWindow, isLauncherSized(key) {
             return key
         }
-
-        let windows = NSApplication.shared.windows
 
         if let visibleLauncher = windows.first(where: { $0.isVisible && isLauncherSized($0) }) {
             return visibleLauncher
@@ -189,14 +173,9 @@ extension LauncherView {
         }
     }
 
-    /// The settings panel is a page of the AppKit-owned launcher window, so the
-    /// menu command has to bring that window up itself. The SwiftUI Settings
-    /// scene is only a command carrier and must not open a window of its own.
-    /// Focus is left to the `showsThemeSettings` observer in LauncherView, which
-    /// routes it to the settings input or back to the query field.
+    /// Opens the configuration file in the user's default text editor.
     func toggleThemeSettings() {
-        appUIState.showsThemeSettings.toggle()
-        revealLauncherWindowIfHidden()
+        ThemeStore.shared.openConfigFile()
     }
 
     /// Show for a `lookapp <mode>` delivery, from hidden or from the background.
@@ -315,13 +294,8 @@ extension LauncherView {
     /// Called at launch and on config reload, so the show path only ever
     /// compares two dates.
     func reloadQueryRetentionPolicy() {
-        let path = ConfigPathResolver.resolvedPath()
-        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
-            queryRetentionSeconds = AppConstants.Launcher.QueryRetention.defaultSeconds
-            return
-        }
-        queryRetentionSeconds = QueryRetentionPolicy.resolveSeconds(
-            from: ConfigFileLines.keyValues(raw))
+        let values = ConfigPathResolver.loadFlatConfig()
+        queryRetentionSeconds = QueryRetentionPolicy.resolveSeconds(from: values)
     }
 
     /// The stamp is consumed either way, so an early show cannot leave a later

@@ -65,6 +65,7 @@ enum ShortcutCatalog {
         // `keys` here is only the default.
         ShortcutGroup(title: "Global", topic: .main, entries: [
             ShortcutEntry("global.toggleLauncher", "Cmd+Space", "Show or hide Look from any app"),
+            ShortcutEntry("global.toggleClipboard", "Cmd+Shift+V", "Open clipboard history from any app"),
         ]),
 
         ShortcutGroup(title: "Main", topic: .main, entries: [
@@ -101,13 +102,14 @@ enum ShortcutCatalog {
         ]),
 
         ShortcutGroup(title: "Clipboard history", topic: .main, entries: [
+            ShortcutEntry("clipboard.openDirect", "Cmd+Shift+V", "Jump directly to clipboard history"),
             ShortcutEntry("clipboard.copyBack", "Enter", "Copy selected history item back to clipboard"),
             ShortcutEntry("clipboard.paste", "Cmd+I", "Paste selected history item into the app you came from (text or image)"),
             ShortcutEntry("clipboard.remove", "Cmd+D", "Remove selected clipboard item from Look history"),
         ]),
 
         ShortcutGroup(title: "View & panels", topic: .main, entries: [
-            ShortcutEntry("view.settings", "Cmd+Shift+,", "Open/close settings panel"),
+            ShortcutEntry("view.settings", "Cmd+,", "Open config file in default editor"),
             ShortcutEntry("view.reloadConfig", "Cmd+Shift+R / Cmd+Shift+;", "Reload config (~/.config/look or ~/.look)"),
             ShortcutEntry("view.toggleLayout", "Cmd+Shift+C", "Switch between split and compact until Look quits (config unchanged)"),
             ShortcutEntry("view.zoom", "Cmd+- / Cmd+=", "Zoom UI scale out / in"),

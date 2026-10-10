@@ -5,11 +5,7 @@
 
 use std::process::Command;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-// Suppress the console window when curl spawns from a GUI shell.
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 
 const USER_AGENT: &str = "Look-Launcher";
 /// Appended after the body so one stdout carries both; split on the last newline.
@@ -73,8 +69,7 @@ pub fn get(url: &str, timeout_secs: u32, user_agent: &str, headers: &[&str]) -> 
         command.args(["-H", header]);
     }
     command.arg(url);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
+
 
     let output = command.output().ok()?;
     if !output.status.success() {

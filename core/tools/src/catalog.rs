@@ -186,7 +186,6 @@ pub const TERMINAL_NAMES: &[&str] = &[
     "deepin-terminal",
     "cool-retro-term",
     "wt",
-    "windows terminal",
 ];
 
 pub fn surface(tool: &str) -> Surface {

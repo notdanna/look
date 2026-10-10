@@ -413,36 +413,11 @@ pub fn descriptors_for(result_id: &str, kind: &str) -> Vec<ActionDescriptor> {
 /// Maps a platform result to a shared `action_id`. The action DEFINITIONS above
 /// are shared; only which platform result triggers them is per-OS, so this is
 /// `cfg`-gated. A contributor adding an OS binds its result id here.
-#[cfg(target_os = "macos")]
 fn binding_for(result_id: &str, _kind: &str) -> Option<&'static str> {
     match result_id {
         "setting:com.apple.bluetoothsettings" => Some("bluetooth"),
         _ => None,
     }
-}
-
-#[cfg(target_os = "linux")]
-fn binding_for(result_id: &str, _kind: &str) -> Option<&'static str> {
-    // Ids come from core/engine/src/platform/linux/settings_catalog.rs.
-    match result_id {
-        "setting:bluetooth" => Some("bluetooth"),
-        _ => None,
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn binding_for(result_id: &str, _kind: &str) -> Option<&'static str> {
-    // Ids come from core/engine/src/platform/windows/settings_catalog.rs
-    // (candidate_id_suffix, prefixed with `setting:`).
-    match result_id {
-        "setting:windows.devices.bluetooth" => Some("bluetooth"),
-        _ => None,
-    }
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-fn binding_for(_result_id: &str, _kind: &str) -> Option<&'static str> {
-    None
 }
 
 #[cfg(test)]
@@ -602,27 +577,6 @@ mod tests {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn linux_bluetooth_setting_resolves_to_the_toggle() {
-        let found = descriptors_for("setting:bluetooth", "app");
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].action_id, "bluetooth");
-        // A non-actionable result yields nothing.
-        assert!(descriptors_for("setting:sound", "app").is_empty());
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn windows_bluetooth_setting_resolves_to_the_toggle() {
-        let found = descriptors_for("setting:windows.devices.bluetooth", "app");
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].action_id, "bluetooth");
-        // A non-actionable result yields nothing.
-        assert!(descriptors_for("setting:windows.devices.wifi", "app").is_empty());
-    }
-
-    #[cfg(target_os = "macos")]
     #[test]
     fn macos_bluetooth_setting_resolves_to_the_toggle() {
         let found = descriptors_for("setting:com.apple.bluetoothsettings", "app");

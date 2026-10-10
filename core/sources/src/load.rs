@@ -198,43 +198,15 @@ pub fn load_dir(dir: &Path) -> Loaded {
 /// The shell text that runs an executable source. Quoted, because the sources
 /// directory sits under a home folder the user named, and plenty of them have a
 /// space in the name.
-#[cfg(not(windows))]
 fn executable_command(path: &Path) -> String {
     look_tools::shell_quote(&path.to_string_lossy())
 }
 
-/// `cmd` runs what `PATHEXT` covers, and `.ps1` is not on that list: a script
-/// there needs PowerShell named in front of it or the step reads as a missing
-/// command.
-#[cfg(windows)]
-fn executable_command(path: &Path) -> String {
-    let quoted = look_tools::cmd_quote(&path.to_string_lossy());
-    let powershell = path
-        .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("ps1"));
-    if powershell {
-        format!("powershell -NoProfile -ExecutionPolicy Bypass -File {quoted}")
-    } else {
-        quoted
-    }
-}
-
-#[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
     const ANY_EXECUTE_BIT: u32 = 0o111;
     fs::metadata(path).is_ok_and(|meta| meta.permissions().mode() & ANY_EXECUTE_BIT != 0)
-}
-
-#[cfg(windows)]
-fn is_executable(path: &Path) -> bool {
-    const EXECUTABLE_EXTENSIONS: [&str; 5] = ["exe", "cmd", "bat", "ps1", "com"];
-
-    path.extension().is_some_and(|extension| {
-        let extension = extension.to_string_lossy().to_lowercase();
-        EXECUTABLE_EXTENSIONS.contains(&extension.as_str())
-    })
 }
 
 #[cfg(test)]
@@ -315,35 +287,6 @@ mod tests {
         assert_eq!(loaded.blocks[0].producer.key(), KEY_RUN);
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn an_executable_needs_no_declaration() {
-        let tmp = TempDir::new("executable");
-        tmp.write_executable("hosts.cmd", "@echo web1\n");
-        tmp.write_executable("repos.ps1", "Write-Output look\n");
-
-        let loaded = load_dir(&tmp.0);
-        let ids: Vec<&str> = loaded.blocks.iter().map(|b| b.id.as_str()).collect();
-        assert_eq!(ids, ["hosts", "repos"]);
-        assert!(loaded.blocks.iter().all(|b| b.producer.key() == KEY_RUN));
-
-        // The path is quoted for `cmd`, and a `.ps1` names the interpreter that
-        // can actually run it: `PATHEXT` does not cover one.
-        let command = |id: &str| match &loaded.blocks.iter().find(|b| b.id == id).unwrap().producer
-        {
-            crate::def::Producer::Run { command, .. } => command.clone(),
-            other => panic!("{other:?}"),
-        };
-        assert_eq!(
-            command("hosts"),
-            format!("\"{}\"", tmp.0.join("hosts.cmd").display())
-        );
-        assert!(
-            command("repos").starts_with("powershell -NoProfile -ExecutionPolicy Bypass -File \""),
-            "{}",
-            command("repos")
-        );
-    }
 
     #[test]
     fn a_duplicate_block_id_loads_once_and_says_so() {

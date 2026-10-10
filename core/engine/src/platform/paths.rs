@@ -20,12 +20,6 @@ pub(crate) struct PathPolicy {
 
 impl PathPolicy {
     pub(crate) fn current() -> Self {
-        if cfg!(target_os = "windows") {
-            return Self {
-                style: PathStyle::Windows,
-            };
-        }
-
         Self {
             style: PathStyle::Posix,
         }
@@ -245,8 +239,7 @@ fn looks_like_windows_absolute_path(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_os = "windows")]
-    use super::path_is_same_or_child;
+
     use super::{PathPolicy, PathStyle, is_valid_filename_component_for_style};
     use super::{expand_with_home, join_path, looks_like_absolute_path};
 
@@ -257,18 +250,7 @@ mod tests {
         assert!(looks_like_absolute_path("\\\\server\\share\\folder"));
     }
 
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn path_boundary_matching_is_separator_aware() {
-        assert!(path_is_same_or_child(
-            "C:/Users/demo/Downloads",
-            "C:\\Users\\demo"
-        ));
-        assert!(!path_is_same_or_child(
-            "C:/Users/demo/Down",
-            "C:/Users/demo/Downloads"
-        ));
-    }
+
 
     #[test]
     fn posix_normalization_keeps_backslash_and_spaces() {

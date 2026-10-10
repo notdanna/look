@@ -216,12 +216,12 @@ struct LauncherView: View {
         themeStore.settings.runningAppsPlacement
     }
 
-    /// Not in command mode, not showing theme settings, not showing the help
-    /// screen - the coarse "nothing else has taken over the launcher" gate
-    /// shared by the running-apps strip, floating-card layout, home hint,
-    /// empty-query rest state, and delete confirmation.
+    /// Not in command mode, not showing the help screen - the coarse "nothing
+    /// else has taken over the launcher" gate shared by the running-apps strip,
+    /// floating-card layout, home hint, empty-query rest state, and delete
+    /// confirmation.
     var isLauncherIdle: Bool {
-        !isCommandMode && !appUIState.showsThemeSettings && !showsHelpScreen
+        !isCommandMode && !showsHelpScreen
     }
 
     var isCompactLayout: Bool {
@@ -256,7 +256,7 @@ struct LauncherView: View {
         // activate an icon that is not on screen, which is also what hands
         // ⌘1-9 to the session list in AI mode.
         if runningAppsPlacement == .none || isCompactLayout || !isLauncherIdle || isAIMode {
-            log.debug("⌘+\(key, privacy: .public) declined (placement=\(self.runningAppsPlacement.rawValue, privacy: .public) compact=\(self.isCompactLayout, privacy: .public) cmd=\(self.isCommandMode, privacy: .public) settings=\(self.appUIState.showsThemeSettings, privacy: .public) help=\(self.showsHelpScreen, privacy: .public) ai=\(self.isAIMode, privacy: .public))")
+            log.debug("⌘+\(key, privacy: .public) declined (placement=\(self.runningAppsPlacement.rawValue, privacy: .public) compact=\(self.isCompactLayout, privacy: .public) cmd=\(self.isCommandMode, privacy: .public) help=\(self.showsHelpScreen, privacy: .public) ai=\(self.isAIMode, privacy: .public))")
             return false
         }
         guard let position = AppConstants.Launcher.RunningAppsStrip.visualPosition(forKey: key, total: total) else {
@@ -639,13 +639,9 @@ struct LauncherView: View {
 
     /// Every hint line is at most three items, the same budget linows keeps
     /// (apps/linows/src/js/app.js). The footer sits inside a card, so a fourth
-    /// item wraps or truncates; the keys left out are still listed in
-    /// Settings > Shortcuts.
+    /// item wraps or truncates; the keys left out are still listed in the
+    /// help screen (Cmd+H).
     var hintItems: [String] {
-        if appUIState.showsThemeSettings {
-            return ["Cmd+Shift+R / Cmd+Shift+; apply config", "Cmd+Shift+, close settings", "Cmd+H help"]
-        }
-
         if isHideAppConfirmationVisible {
             return ["Y confirm", "N cancel", "Esc back"]
         }
@@ -939,13 +935,11 @@ struct LauncherView: View {
             }
         }
         .onChange(of: themeStore.settings.windowWidth) { _, _ in
-            guard !appUIState.showsThemeSettings else { return }
             if let window = launcherWindow() {
                 positionOnActiveScreen(window)
             }
         }
         .onChange(of: themeStore.settings.searchBarWidth) { _, _ in
-            guard !appUIState.showsThemeSettings else { return }
             if let window = launcherWindow() {
                 positionOnActiveScreen(window)
             }
@@ -1032,19 +1026,6 @@ struct LauncherView: View {
             // /kill ranks the same cached snapshot; take a fresh one on entry.
             if newID == AppConstants.Launcher.Command.kill {
                 processModel.refreshSnapshot()
-            }
-        }
-        .onChange(of: appUIState.showsThemeSettings) { _, showsSettings in
-            if showsSettings {
-                showsHelpScreen = false
-                keyboardMonitor.stop()
-                NotificationCenter.default.post(name: .lookFocusSettingsInputRequested, object: nil)
-            } else {
-                startKeyboardNavigationIfNeeded()
-                focusActiveInput()
-            }
-            if let window = launcherWindow() {
-                positionOnActiveScreen(window)
             }
         }
         .onMoveCommand { direction in
@@ -1154,6 +1135,35 @@ struct LauncherView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .lookOpenClipboardRequested)) { _ in
+            DispatchQueue.main.async {
+                openClipboardHistory()
+            }
+        }
+    }
+
+    func openClipboardHistory() {
+        let win = launcherWindow()
+        let isActive = NSApplication.shared.isActive
+        let isVisible = win?.isVisible ?? false
+
+        if isVisible && isActive && isClipboardQuery {
+            hideLauncherWindow()
+            return
+        }
+
+        if !isVisible || !isActive {
+            toggleWindowVisibility()
+        }
+
+        if isCommandMode {
+            exitCommandMode()
+        }
+        query = "c "
+        queryToSelectOnFocus = query
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            focusActiveInput(recoveryDelays: [0.0, 0.04], activateApp: true)
+        }
     }
 
 
@@ -1243,6 +1253,10 @@ struct LauncherView: View {
             // Editing away from `>` drops any pending or in-flight action.
             if actionController.isPresenting || actionController.isPlanning {
                 actionController.cancel()
+            }
+            if !isCommandMode, (query == "/clip" || query == ":clip" || query == "/clipboard" || query == ":clipboard") {
+                openClipboardHistory()
+                return
             }
             if !isCommandMode, let cmd = extractInlineCommand(from: query), cmd.hasSpace {
                 aiAnswer.cancel()
@@ -1348,10 +1362,7 @@ struct LauncherView: View {
 
     @ViewBuilder
     private var panelContent: some View {
-        if appUIState.showsThemeSettings {
-            ThemeSettingsView(settings: $themeStore.settings)
-        } else {
-            if showsTopRowBar {
+        if showsTopRowBar {
                 // The search field and running-apps icons always share one
                 // background so they read as a single unified bar: a frosted
                 // tile when floating, the classic rounded fill otherwise. The
@@ -1521,7 +1532,6 @@ struct LauncherView: View {
                     .frame(maxWidth: CGFloat(themeStore.settings.windowWidth))
                     .frame(maxWidth: .infinity, alignment: .center)
             }
-        }
     }
 
     @ViewBuilder
@@ -1713,15 +1723,13 @@ struct LauncherView: View {
     /// Only ever the input: it waits for an Enter a person has to press.
     ///
     /// Whatever the launcher was showing has to be left first. A warm
-    /// `lookapp clipboard` can land while command mode, the AI session, help or
-    /// settings owns the panel, and each of those would swallow the prefix:
-    /// command mode types into `commandInput`, AI into the session, and
-    /// `focusActiveInput` routes to the settings field.
+    /// `lookapp clipboard` can land while command mode, the AI session or help
+    /// owns the panel, and each of those would swallow the prefix: command mode
+    /// types into `commandInput`, AI into the session.
     private func applyLaunchQuery(_ text: String) {
         exitCommandMode()
         exitAIToHome()
         showsHelpScreen = false
-        appUIState.showsThemeSettings = false
         query = text
         focusActiveInput()
     }
@@ -2445,7 +2453,7 @@ struct LauncherView: View {
 
     /// The search bar is the panel's first row, so it owns the window's top edge.
     private var showsTopRowBar: Bool {
-        !appUIState.showsThemeSettings && !isCommandMode && !showsHelpScreen
+        !isCommandMode && !showsHelpScreen
     }
 
     /// The empty-query rest state as drawn: just the bar. The AI session starts

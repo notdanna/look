@@ -331,10 +331,7 @@ mod tests {
     /// language. `cmd` reads `;` as an argument rather than a separator, so the
     /// POSIX spelling exits zero there with nothing on stdout - which is the
     /// signal for "printed nothing", the opposite of what this test is about.
-    #[cfg(not(windows))]
     const FAILING_COMMAND: &str = "echo boom >&2; exit 1";
-    #[cfg(windows)]
-    const FAILING_COMMAND: &str = "echo boom 1>&2& exit 1";
 
     #[test]
     fn a_failing_command_keeps_the_last_good_value_and_says_why() {

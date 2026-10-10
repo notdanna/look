@@ -14,7 +14,6 @@ mod netspeed_api;
 mod qactions_api;
 mod runtime_config;
 mod search_api;
-mod seed_api;
 mod sources_api;
 mod state;
 mod todo_api;
@@ -120,13 +119,6 @@ pub extern "C" fn look_reload_config() -> bool {
     .unwrap_or(false)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn look_seed_uwp_apps_json(json: *const c_char) -> bool {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        seed_api::look_seed_uwp_apps_json_impl(json)
-    }))
-    .unwrap_or(false)
-}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn look_request_index_refresh() -> bool {
@@ -438,6 +430,92 @@ pub extern "C" fn look_config_path(dev: bool) -> *mut c_char {
         sources_api::look_config_path_impl(dev)
     }))
     .unwrap_or(std::ptr::null_mut())
+}
+
+/// Reads the active configuration file and returns all flattened key-value pairs as a JSON object string.
+/// On syntax error or missing file, returns JSON `{"_error": "..."}`.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_config_values_json() -> *mut c_char {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let Some(path) = look_engine::config_path::current().map(|r| r.path) else {
+            return state::json_cstring_or_null(Some(r#"{"_error": "No config path resolved"}"#.into()));
+        };
+
+        if !path.exists() {
+            if path.to_string_lossy().ends_with(".toml") {
+                let _ = std::fs::write(&path, look_engine::config_toml::default_toml_contents());
+            }
+        }
+
+        let Ok(contents) = std::fs::read_to_string(&path) else {
+            return state::json_cstring_or_null(Some(r#"{"_error": "Failed to read config file"}"#.into()));
+        };
+
+        let is_toml = path.to_string_lossy().ends_with(".toml") || contents.lines().any(|l| l.trim().starts_with('[') && l.trim().ends_with(']'));
+        let map = if is_toml {
+            match look_engine::config_toml::toml_to_flat_map(&contents) {
+                Ok(m) => m,
+                Err(e) => {
+                    let mut err_map = std::collections::HashMap::new();
+                    err_map.insert("_error".to_string(), e);
+                    err_map
+                }
+            }
+        } else {
+            let mut m = std::collections::HashMap::new();
+            for raw_line in contents.lines() {
+                let line = raw_line.split('#').next().unwrap_or("").trim();
+                if line.is_empty() { continue; }
+                if let Some((k, v)) = line.split_once('=') {
+                    m.insert(k.trim().to_string(), v.trim().to_string());
+                }
+            }
+            m
+        };
+
+        let json = serde_json::to_string(&map).unwrap_or_else(|_| "{}".into());
+        state::json_cstring_or_null(Some(json))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Updates or inserts a value in a section of the active configuration file.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_config_set_value(section: *const c_char, key: *const c_char, raw_val: *const c_char) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let sec = state::cstr_to_string(section);
+        let k = state::cstr_to_string(key);
+        let val = state::cstr_to_string(raw_val);
+
+        let Some(path) = look_engine::config_path::current().map(|r| r.path) else {
+            return false;
+        };
+
+        let mut contents = std::fs::read_to_string(&path).unwrap_or_else(|_| look_engine::config_toml::default_toml_contents());
+        look_engine::config_toml::set_toml_value(&mut contents, &sec, &k, &val);
+        std::fs::write(&path, contents).is_ok()
+    }))
+    .unwrap_or(false)
+}
+
+/// Removes a key from a section of the active configuration file.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_config_remove_value(section: *const c_char, key: *const c_char) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let sec = state::cstr_to_string(section);
+        let k = state::cstr_to_string(key);
+
+        let Some(path) = look_engine::config_path::current().map(|r| r.path) else {
+            return false;
+        };
+
+        let Ok(mut contents) = std::fs::read_to_string(&path) else {
+            return false;
+        };
+        look_engine::config_toml::remove_toml_value(&mut contents, &sec, &k);
+        std::fs::write(&path, contents).is_ok()
+    }))
+    .unwrap_or(false)
 }
 
 /// Re-runs every enabled `run` block and stores its rows for the next index
@@ -1393,122 +1471,6 @@ mod tests {
         let bad = CString::new("not json").expect("bad cstring");
         assert!(!look_todo_save_json(bad.as_ptr()));
 
-        let _ = fs::remove_file(&db_path);
-    }
-
-    #[test]
-    fn ffi_seed_uwp_apps_json_inserts_and_search_finds() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        // Both sides of the guard, for the reason the smoke test above gives.
-        state::wait_for_index_refresh_for_test();
-
-        let db_path = unique_test_db_path();
-        let _ = fs::remove_file(&db_path);
-
-        state::set_db_path_for_test(&db_path);
-        assert!(look_reload_config());
-        // The reload restarts the watchers and can spawn a refresh of its own,
-        // neither wanted while this seeds and prunes the same database.
-        state::stop_index_watchers_for_test();
-        state::wait_for_index_refresh_for_test();
-
-        // The JSON shape the seeding API accepts.
-        let json = CString::new(
-            r#"[
-                {"aumid": "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", "title": "Terminal"},
-                {"aumid": "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App", "title": "Notepad"}
-            ]"#,
-        )
-        .expect("seed json");
-        assert!(look_seed_uwp_apps_json(json.as_ptr()));
-
-        // Round-trip via sqlite - make sure the rows actually persisted with the right shape.
-        let stored = SqliteStore::open(&db_path)
-            .expect("reopen sqlite")
-            .load_candidates(None)
-            .expect("load candidates");
-        let terminal = stored
-            .iter()
-            .find(|c| c.id.as_ref() == "app:uwp:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App")
-            .expect("seeded terminal candidate");
-        assert_eq!(terminal.title.as_ref(), "Terminal");
-        assert_eq!(
-            terminal.path.as_ref(),
-            "shell:AppsFolder\\Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
-        );
-        assert_eq!(terminal.use_count, 0);
-        assert_eq!(terminal.last_used_at_unix_s, None);
-
-        // Search has to surface the seeded entry - without this, the user can't find Terminal
-        // via the launcher even though it sits in the DB.
-        let query = CString::new("terminal").expect("query");
-        let ptr = look_search_json(query.as_ptr(), 10);
-        assert!(!ptr.is_null());
-        let raw = unsafe { CStr::from_ptr(ptr) }
-            .to_string_lossy()
-            .into_owned();
-        look_free_cstring(ptr);
-        let payload: serde_json::Value = serde_json::from_str(&raw).expect("valid search payload");
-        let has_terminal = payload
-            .get("results")
-            .and_then(|value| value.as_array())
-            .is_some_and(|results| {
-                results.iter().any(|item| {
-                    item.get("id")
-                        .and_then(|value| value.as_str())
-                        .is_some_and(|id| {
-                            id == "app:uwp:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
-                        })
-                })
-            });
-        assert!(
-            has_terminal,
-            "expected seeded UWP Terminal in search results, got: {raw}"
-        );
-
-        // Re-seeding must be idempotent and preserve use_count after a launch.
-        let id = CString::new("app:uwp:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App").expect("id");
-        let action = CString::new("open_app").expect("action");
-        assert!(look_record_usage(id.as_ptr(), action.as_ptr()));
-        assert!(look_seed_uwp_apps_json(json.as_ptr())); // second seed
-        let after = SqliteStore::open(&db_path)
-            .expect("reopen")
-            .load_candidates(None)
-            .expect("load");
-        let after_terminal = after
-            .iter()
-            .find(|c| c.id.as_ref() == "app:uwp:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App")
-            .expect("still here");
-        assert_eq!(
-            after_terminal.use_count, 1,
-            "re-seeding must preserve use_count via ON CONFLICT"
-        );
-
-        // Re-seed with Notepad omitted - simulates the user uninstalling that UWP app
-        // between runs. The vanished row must be pruned so it doesn't keep showing up
-        // in search forever (delete_stale_candidates can't reach rows written with
-        // indexed_at_unix_s = i64::MAX).
-        let json_terminal_only = CString::new(
-            r#"[{"aumid": "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", "title": "Terminal"}]"#,
-        )
-        .expect("seed json terminal only");
-        assert!(look_seed_uwp_apps_json(json_terminal_only.as_ptr()));
-
-        let after_prune = SqliteStore::open(&db_path)
-            .expect("reopen for prune check")
-            .load_candidates(None)
-            .expect("load after prune");
-        let ids_after_prune: Vec<&str> = after_prune.iter().map(|c| c.id.as_ref()).collect();
-        assert!(ids_after_prune.contains(&"app:uwp:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
-        assert!(
-            !ids_after_prune.contains(&"app:uwp:Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"),
-            "Notepad should have been pruned after disappearing from the seed"
-        );
-
-        state::wait_for_index_refresh_for_test();
         let _ = fs::remove_file(&db_path);
     }
 }

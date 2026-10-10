@@ -71,30 +71,29 @@ struct look_appApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
 
-            // The Settings scene above only keeps SwiftUI's command
-            // infrastructure alive. Remove macOS's default Cmd+, action so the
-            // documented Cmd+Shift+, shortcut is the only way to open settings.
-            CommandGroup(replacing: .appSettings) {}
+            // Standard macOS Cmd+, opens the configuration file in the user's editor.
+            CommandGroup(replacing: .appSettings) {
+                Button("Open Config File…") {
+                    DispatchQueue.main.async {
+                        themeStore.openConfigFile()
+                    }
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
 
+            // Standard macOS Cmd+Q quits the application.
             CommandGroup(replacing: .appTermination) {
                 Button("Hide Look") {
                     NotificationCenter.default.post(name: .lookHideLauncherRequested, object: nil)
                 }
-                .keyboardShortcut("q", modifiers: [.command])
 
                 Button("Quit Look") {
                     NSApplication.shared.terminate(nil)
                 }
-                .keyboardShortcut("q", modifiers: [.command, .option])
+                .keyboardShortcut("q", modifiers: [.command])
             }
 
             CommandGroup(after: .appSettings) {
-                Button("Theme Settings") {
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .lookToggleSettingsRequested, object: nil)
-                    }
-                }
-                .keyboardShortcut(",", modifiers: [.command, .shift])
 
                 Button("Reload Config") {
                     DispatchQueue.main.async {

@@ -168,14 +168,10 @@ final class ClipboardHistoryStore: ObservableObject {
         }
     }
 
-    /// Reads every `key=value` pair from the active config file once, or an empty map when
+    /// Reads every key-value pair from the active config file once, or an empty map when
     /// the file is missing/unreadable. One parse feeds all clipboard settings.
     private static func loadConfigValues() -> [String: String] {
-        let path = ConfigPathResolver.resolvedPath()
-        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
-            return [:]
-        }
-        return ConfigFileLines.keyValues(raw)
+        ConfigPathResolver.loadFlatConfig()
     }
 
     private static func resolveMaxEntries() -> Int {

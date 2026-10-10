@@ -512,10 +512,12 @@ enum AppConstants {
         /// US layout, not characters, so a handler that must follow the printed
         /// letter on other layouts matches `charactersIgnoringModifiers` as well.
         enum KeyCode {
+            static let s: UInt16 = 1
             static let d: UInt16 = 2
             static let f: UInt16 = 3
             static let h: UInt16 = 4
             static let c: UInt16 = 8
+            static let v: UInt16 = 9
             static let e: UInt16 = 14
             static let r: UInt16 = 15
             static let t: UInt16 = 17

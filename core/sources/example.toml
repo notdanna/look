@@ -11,7 +11,7 @@
 #
 # Nothing is file-wide. Each block stands alone.
 #
-# Reload after editing: Cmd+Shift+; (Ctrl+Shift+; on Linux/Windows)
+# Reload after editing: Cmd+Shift+;
 #
 # Full guide: docs/user-sources.md
 

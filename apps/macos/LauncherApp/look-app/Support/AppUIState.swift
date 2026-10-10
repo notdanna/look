@@ -7,8 +7,6 @@ final class AppUIState: ObservableObject {
     // state. See AppDelegate.makeLauncherWindow().
     static let shared = AppUIState()
 
-    @Published var showsThemeSettings = false
-
     // Remembered command id of the last command-mode panel the user
     // visited *during this launch*. Re-entering command mode (Cmd+/)
     // resumes there instead of jumping back to /calc. Intentionally
@@ -27,9 +25,9 @@ extension Notification.Name {
     /// A row's `then` targets finished loading off the main actor, so the panel
     /// that showed none can build its action list now.
     static let lookSourceTargetsLoaded = Notification.Name("look.sourceTargetsLoaded")
-    static let lookFocusSettingsInputRequested = Notification.Name("look.focusSettingsInputRequested")
     static let lookToggleWindowRequested = Notification.Name("look.toggleWindowRequested")
     static let lookToggleSettingsRequested = Notification.Name("look.toggleSettingsRequested")
     static let lookActivateLauncherRequested = Notification.Name("look.activateLauncherRequested")
     static let lookHideLauncherRequested = Notification.Name("look.hideLauncherRequested")
+    static let lookOpenClipboardRequested = Notification.Name("look.openClipboardRequested")
 }

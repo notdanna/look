@@ -67,24 +67,6 @@ bld/
 .vscode/
 *.code-workspace
 
-## Windows build scripts
-build-ffi.bat
-
-## Files built by Visual Studio
-*.sln.iml
-*.trx
-
-## Windows app packaging outputs
-AppPackages/
-BundleArtifacts/
-*.appx
-*.appxbundle
-*.appxupload
-*.msix
-*.msixbundle
-*.msixupload
-*.msixsym
-*.msi
 
 ## Agents junk Data
 .claude
@@ -94,5 +76,3 @@ CLAUDE.md
 ## Literal ~ directories (cargo bug)
 ~/
 
-## linows local review notes
-apps/linows/LINUX-REVIEW.md

@@ -190,13 +190,7 @@ pub fn reveal(tools: &Tools, target: &Target) -> Launch {
     }
 }
 
-/// Composition emits POSIX shell text down to its quoting, so a platform without
-/// a POSIX shell takes [`windows_launch`] instead of being handed text `cmd`
-/// would mangle.
-#[cfg(unix)]
-const POSIX_SHELL_AVAILABLE: bool = true;
-#[cfg(not(unix))]
-const POSIX_SHELL_AVAILABLE: bool = false;
+
 
 /// `text_editor` for a file, `code_editor` for a folder; declaring one covers
 /// both.
@@ -252,10 +246,6 @@ fn in_terminal(
         },
     })?;
 
-    if !POSIX_SHELL_AVAILABLE {
-        return windows_launch(terminal, target, editor);
-    }
-
     // Quoted like the path: a tool declared as `/opt/my tools/nvim` is one
     // word. A tool is a name, never a command with its own args.
     let inner = match editor {
@@ -280,37 +270,6 @@ fn in_terminal(
         tool: terminal.to_string(),
         command,
     })
-}
-
-/// The Windows half: `windows_terminals` owns which argv a terminal takes.
-/// Paths go in with backslashes, the separator every console host parses.
-fn windows_launch(
-    terminal: &str,
-    target: &Target,
-    editor: Option<&str>,
-) -> Result<Launch, Unavailable> {
-    let cwd = native_path(&target.dir());
-    let path = native_path(target.path());
-    let command: Vec<&str> = match editor {
-        None => Vec::new(),
-        Some(tool) => vec![tool, &path],
-    };
-
-    let args = crate::windows_terminals::argv(terminal, &cwd, &command).ok_or_else(|| {
-        Unavailable::CannotRunCommand {
-            tool: terminal.to_string(),
-        }
-    })?;
-
-    Ok(Launch::Argv {
-        tool: terminal.to_string(),
-        args,
-        cwd,
-    })
-}
-
-fn native_path(path: &str) -> String {
-    path.replace('/', "\\")
 }
 
 /// `<terminal> <prefix...> "$SHELL" -lc '<inner>'`. The inner login shell is what
@@ -425,71 +384,7 @@ mod tests {
         );
     }
 
-    /// Windows has no shell to compose through, so the terminal is started
-    /// directly: its own argv, in the target directory.
-    #[cfg(not(unix))]
-    #[test]
-    fn a_windows_terminal_is_started_in_the_target_directory() {
-        assert_eq!(
-            terminal_here(
-                &tools(None, None, Some("wt")),
-                &Target::Folder("C:/look".into())
-            ),
-            Ok(Launch::Argv {
-                tool: "wt".into(),
-                args: vec!["-d".into(), "C:\\look".into()],
-                cwd: "C:\\look".into(),
-            })
-        );
-        // A file row opens its parent, the same as everywhere else.
-        assert_eq!(
-            terminal_here(
-                &tools(None, None, Some("cmd")),
-                &Target::File("C:/look/a.txt".into())
-            ),
-            Ok(Launch::Argv {
-                tool: "cmd".into(),
-                args: Vec::new(),
-                cwd: "C:\\look".into(),
-            })
-        );
-    }
 
-    /// A TTY editor still needs a terminal on Windows, and rides in as argv
-    /// rather than as a quoted shell line.
-    #[cfg(not(unix))]
-    #[test]
-    fn a_windows_tty_editor_rides_in_its_terminals_argv() {
-        assert_eq!(
-            edit(&tools(Some("nvim"), None, None), &file()),
-            Err(Unavailable::TerminalRequired {
-                tool: "nvim".into(),
-                key: key::TERMINAL
-            })
-        );
-        assert_eq!(
-            edit(
-                &tools(Some("nvim"), None, Some("wt")),
-                &Target::File("C:/look/a.txt".into())
-            ),
-            Ok(Launch::Argv {
-                tool: "wt".into(),
-                args: vec![
-                    "-d".into(),
-                    "C:\\look".into(),
-                    "nvim".into(),
-                    "C:\\look\\a.txt".into()
-                ],
-                cwd: "C:\\look".into(),
-            })
-        );
-        // cmd takes no argv for a command, and says so rather than opening a
-        // window that ignores the editor.
-        assert_eq!(
-            edit(&tools(Some("nvim"), None, Some("cmd")), &file()),
-            Err(Unavailable::CannotRunCommand { tool: "cmd".into() })
-        );
-    }
 
     #[test]
     fn edit_prefers_the_editor_for_the_row_kind() {

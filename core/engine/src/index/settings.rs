@@ -16,15 +16,6 @@ pub fn discover_system_settings_entries(
         for entry in available_entries() {
             emit_entry(&tx, entry, &display_title(entry, &localized));
         }
-
-        // Windows extras: classic .cpl / .msc / .exe applets that Settings
-        // doesn't cover (env vars, Device Manager, Services, Registry, Task
-        // Manager, …). Paths use the `look-cmd://` scheme so the Tauri launcher
-        // knows to spawn them via Command::new rather than ShellExecute.
-        #[cfg(target_os = "windows")]
-        emit_windows_control_panel_entries(&tx);
-    } else {
-        emit_settings_fallback_entries(&tx);
     }
 }
 
@@ -33,28 +24,6 @@ fn available_entries() -> impl Iterator<Item = &'static SettingsCatalogEntry> {
         .iter()
         .filter(|entry| platform::settings_entry_available(entry))
 }
-
-/// No settings app (sway, i3, minimal): the panel targets are
-/// settings-app URLs that won't open here, so we skip them - except
-/// Bluetooth, whose quick action toggles and lists devices over BlueZ, which
-/// is desktop-agnostic. Surface just that one when a controller is present.
-#[cfg(target_os = "linux")]
-fn emit_settings_fallback_entries(tx: &mpsc::SyncSender<Candidate>) {
-    if platform::bluetooth_present()
-        && let Some(entry) = platform::settings_catalog()
-            .iter()
-            .find(|e| e.target == "bluetooth")
-    {
-        emit_entry(tx, entry, entry.title);
-    }
-}
-
-/// Only Linux has a fallback: elsewhere a missing settings app means there is
-/// nothing to surface. Kept as a real function so the branch above reads the same
-/// on every platform, rather than an early return that dangles once the Linux-only
-/// tail is compiled out.
-#[cfg(not(target_os = "linux"))]
-fn emit_settings_fallback_entries(_tx: &mpsc::SyncSender<Candidate>) {}
 
 fn emit_entry(tx: &mpsc::SyncSender<Candidate>, entry: &SettingsCatalogEntry, title: &str) {
     let mut candidate = Candidate::new(
@@ -99,23 +68,6 @@ fn display_title(entry: &SettingsCatalogEntry, localized: &LocalizedTitles) -> S
     }
 }
 
-#[cfg(target_os = "windows")]
-fn emit_windows_control_panel_entries(tx: &mpsc::SyncSender<Candidate>) {
-    for entry in platform::windows_control_panel_catalog() {
-        let mut candidate = Candidate::new(
-            &format!(
-                "{SETTINGS_CANDIDATE_ID_PREFIX}{}",
-                entry.candidate_id_suffix
-            ),
-            CandidateKind::App,
-            entry.title,
-            &platform::windows_control_panel_target_path(entry),
-        );
-        candidate.subtitle =
-            Some(format!("{}{}", platform::settings_subtitle_prefix(), entry.aliases).into());
-        let _ = tx.send(candidate);
-    }
-}
 
 fn candidate_id(entry: &SettingsCatalogEntry) -> String {
     format!(
@@ -300,35 +252,14 @@ mod tests {
     }
 
     fn assert_valid_settings_candidates(discovered: Vec<Candidate>) {
-        let expected_len = if platform::has_settings_app() {
-            #[allow(unused_mut)]
-            let mut total = available_entries().count();
-            #[cfg(target_os = "windows")]
-            {
-                total += platform::windows_control_panel_catalog().len();
-            }
-            total
-        } else {
-            // The only no-settings-app case is Linux, which still surfaces the
-            // Bluetooth entry alone when a controller is present.
-            #[cfg(target_os = "linux")]
-            {
-                usize::from(platform::bluetooth_present())
-            }
-            #[cfg(not(target_os = "linux"))]
-            {
-                0
-            }
-        };
+        let expected_len = available_entries().count();
         assert_eq!(discovered.len(), expected_len);
 
         let settings_scheme = platform::settings_url_scheme_prefix();
         for candidate in discovered {
             assert_eq!(candidate.kind, CandidateKind::App);
             assert!(candidate.id.starts_with(CandidateIdKind::PREFIX_SETTING));
-            // Windows Control Panel entries use look-cmd:// instead of ms-settings:.
-            let path_ok = candidate.path.starts_with(settings_scheme)
-                || candidate.path.starts_with("look-cmd://");
+            let path_ok = candidate.path.starts_with(settings_scheme);
             assert!(path_ok, "unexpected path scheme: {}", candidate.path);
             assert!(
                 candidate

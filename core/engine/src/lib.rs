@@ -1,6 +1,7 @@
 pub mod action;
 pub mod config;
 pub mod config_path;
+pub mod config_toml;
 pub mod hotkey;
 pub mod index;
 pub mod launchpad;

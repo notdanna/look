@@ -39,9 +39,8 @@ DEV_SIGN_IDENTITY ?= $(or $(shell security find-identity -v -p codesigning 2>/de
 LOG_PREDICATE ?= subsystem == "noah-code.Look"
 
 REAL_DB_PATH := $(HOME)/Library/Application Support/look/look.db
-# The dev file Look itself names (core/engine/src/config_path.rs). Never
-# migrated: a dev who had ~/.look.dev.config moves it across themselves.
-DEV_CONFIG_PATH ?= $(HOME)/.look/config.dev
+# The dev file Look itself names (core/engine/src/config_path.rs).
+DEV_CONFIG_PATH ?= $(HOME)/.look/config.dev.toml
 DEV_OPEN_ENV = env -u LOOK_DB_PATH LOOK_CONFIG_PATH="$(DEV_CONFIG_PATH)" LOOK_DEV_HINT=1 LOOK_LOG_LEVEL=debug LOOK_UI_DEBUG_EVENTS=1
 
 .PHONY: help core-check ffi-check ffi-build ffi-build-release ffi-unstale app-build app-ensure-bundle app-stop app-run app-install app-install-dev app-run-dev app-uninstall-dev dev-cli app-logs app-logs-all symbols db-path db-status db-shell db-reset db-refresh

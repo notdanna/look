@@ -17,7 +17,7 @@
 > | `Cmd+<letter>` (super-action tiles)     | `Alt+<letter>`    |
 > | `Cmd+P`                                 | `Ctrl+P`          |
 > | `Cmd+Shift+P`                           | `Ctrl+Shift+P`    |
-> | `Cmd+Shift+,`                           | `Ctrl+Shift+,`    |
+> | `Cmd+,`                                 | `Ctrl+,`          |
 > | `Cmd+Shift+R` / `Cmd+Shift+;`           | `Ctrl+Shift+R` / `Ctrl+Shift+;` |
 >
 > "Reveal in Finder" reads as "Reveal in Explorer" on Windows and "Show in Files" on Linux.
@@ -451,7 +451,7 @@ Commands are shell text, run by your login shell, so your own scripts are first-
 
 ## Settings and config
 
-Open settings with `Cmd+Shift+,`.
+Open settings with `Cmd+,`.
 
 ### Appearance / Themes
 
@@ -600,73 +600,36 @@ Lazy indexing behavior:
 
 Runtime config file:
 
-- path: Look follows the XDG Base Directory specification. It prioritizes `$XDG_CONFIG_HOME/look/config` (or `~/.config/look/config`), falling back transparently to `~/.look/config` if present.
+- path: Look follows the XDG Base Directory specification. It prioritizes `$XDG_CONFIG_HOME/look/config.toml` (or `~/.config/look/config.toml`), falling back transparently to `~/.look/config.toml`. Legacy flat `config` files are automatically migrated.
 - super actions layout: `$XDG_CONFIG_HOME/look/super-actions.toml` (or `~/.config/look/super-actions.toml`), falling back to `~/.look/super-actions.toml`.
 - user sources directory: `$XDG_CONFIG_HOME/look/sources/` (or `~/.config/look/sources/`), falling back to `~/.look/sources/`.
-- optional override: `LOOK_CONFIG_PATH=/path/to/config` always takes precedence when set.
-- reload after manual edits: `Cmd+Shift+R` (or `Cmd+Shift+;`).
+- optional override: `LOOK_CONFIG_PATH=/path/to/config.toml` always takes precedence when set.
+- open config in editor: `Cmd+,` opens the active config file directly in your default editor.
+- auto-reload: Look watches the config file and hot-reloads changes automatically on save (`Cmd+Shift+R` also reloads manually).
 - reload from a script: `lookapp reload-config` applies the file in the running Look without opening the window, so a script that rewrites the theme (for example to follow the wallpaper) takes effect immediately. If Look is not running it does nothing and exits 0.
-- reset to fresh defaults from UI: `Settings -> Advanced -> Create Fresh Config` (confirmation popup)
 
-NixOS / Home Manager users can manage the same file declaratively through the
-flake's Home Manager module. Add the input and pass `inputs` down to your
-modules, which Home Manager does not do on its own:
+Configured via categorized TOML sections:
 
-```nix
-# flake.nix
-inputs.look.url = "github:kunkka19xx/look?dir=apps/linows";
-
-homeConfigurations."me" = home-manager.lib.homeManagerConfiguration {
-  inherit pkgs;
-  extraSpecialArgs = { inherit inputs; };   # or home-manager.extraSpecialArgs
-  modules = [ ./home.nix ];
-};
-```
-
-```nix
-# home.nix
-{ inputs, ... }: {
-  imports = [ inputs.look.homeModules.default ];
-
-  programs.lookapp = {
-    enable = true;
-    theme = "kindle";
-    settings.ai_enabled = false;
-    # package = null;  # config only, Look already installed system-wide
-  };
-}
-```
-
-Activation merges those keys into your config file instead of replacing it, so
-settings you change in the app are kept and only the keys declared in Nix are
-overwritten. Removing a key from the Nix config removes it from the file on the
-next rebuild. Nix wins on every activation, so for the keys it manages, edit the
-Nix config and rebuild rather than using Look's in-app Save Config button. The
-first activation copies the pre-Nix file to `~/.look.config.hm-backup`. See
-`apps/linows/BUILDING.md` for the full option list.
-
-Backend-related keys:
-
-- `app_scan_roots`, `app_scan_depth`, `app_exclude_paths`, `app_exclude_names`
-- `file_scan_roots`, `file_scan_extra_roots`, `file_scan_depth`, `file_scan_limit`, `file_exclude_paths`
-- `ignored_patterns_<group>` (path-aware file ignore globs, merged across all groups)
-- `lazy_indexing_enabled`
-- `skip_dir_names`
-- `alias_<keyword>` (for app + System Settings query aliases, for example `alias_note=Notion|Obsidian|Notes|Apple Notes|Bear|Logseq`)
-- `backend_log_level`, `launch_at_login`, `add_to_path` (Windows)
-
-File-only settings and layout keys:
-
-These keys can be configured directly in your config file (`~/.config/look/config` or `~/.look/config`), then reloaded with `Cmd+Shift+R` (macOS) or `Ctrl+Shift+R` (Linux/Windows), or by restarting Look. Out-of-range or unparseable values fall back to the listed default.
-
-- `window_width` or `content_width` (content and results window width in points, range 500 to 1400, default 860; can also be adjusted interactively in Settings → Appearance → Layout)
-- `search_bar_width` or `bar_width` (search bar width in points, range 350 to 1400, default 860; can be set independently so the top search bar is compact while results and document preview sections remain at their full, comfortable size)
-- `inner_gap` (gap between cards in points, range 0 to 24, default 7; 0 keeps flat classic layout)
-- `ui_surface_radius` (corner radius multiplier, range 0.0 to 2.5, default 1.50)
-- `clipboard_history_limit` (clipboard history size, range 10 to 100, default 10)
-- `launcher_hotkey` (global shortcut that shows and hides Look; modifiers `cmd`/`win`, `ctrl`, `alt`/`option`, `shift` plus one key: a letter, digit, `space`, `enter`, `tab`, `esc`, `f1`-`f20`, or a symbol like `` ` ``. Examples: `ctrl+space`, `alt+shift+space`, `f13`. Default `cmd+space` on macOS, `alt+space` on Windows and Linux. `none` stops Look registering any key, so you can bind `lookapp --toggle` in your desktop or a tool like skhd/AutoHotkey instead; Linux accepts only `none` and applies it on restart. An invalid value falls back to the default and the reload banner says why)
-- `query_retention_seconds` (how long the main query survives while Look is hidden, in seconds; the first open past it returns to the empty home screen; default 5, `0` clears on every hide, and any negative value keeps the query indefinitely)
-- `text_editor`, `code_editor`, `terminal`, `file_manager` (the tools `Cmd+E` / `Cmd+T` / `Cmd+F` act through, see [Preferred tools](#preferred-tools); undeclared means the system default)
+- `[general]`: `launcher_hotkey`, `launch_at_login`, `animations`, `query_retention_seconds`, `log_level`
+- `[appearance]`: `theme`, `layout`, `window_width`, `search_bar_width`, `search_bar_height`, `inner_gap`, `corner_radius`
+  - `[appearance.blur]`: `material`, `opacity`
+  - `[appearance.border]`: `thickness`, `color = [r, g, b, a]`
+  - `[appearance.tint]`: `color = [r, g, b, a]`
+  - `[appearance.font]`: `family`, `size`, `color = [r, g, b, a]`
+  - `[appearance.background_image]`: `path`, `mode`, `opacity`, `blur`
+- `[running_apps]`: `placement`, `theme_tint`
+- `[launchpad]`: `enabled`
+- `[ai]`: `enabled`, `provider`, `allow_remote_context`
+  - `[ai.ollama]`: `host`, `model`
+- `[clipboard]`: `history_limit`, `image_limit`
+- `[indexing]`: `lazy`, `localized_app_names`, `skip_dir_names`
+  - `[indexing.apps]`: `roots`, `depth`, `exclude_paths`, `exclude_names`
+  - `[indexing.files]`: `roots`, `extra_roots`, `depth`, `limit`, `exclude_paths`
+  - `[indexing.ignored_patterns]`: gitignore-style path glob tables
+- `[tools]`: preferred `text_editor`, `code_editor`, `terminal`, `file_manager`
+- `[aliases]`: keyword aliases (`note`, `code`, `term`, `chat`, `music`, `brow`)
+- `[pomo]`: `sessions`, `timer_style`, `music_folder`
+- `[shortcuts]`: custom hotkey definitions
 
 - `ignored_patterns_<group>` uses gitignore-style path glob syntax: `*`, `**`, `?`, `[abc]`
   - macOS/Linux normally use `/` paths like `~/Library/...` or `/home/name/...`
@@ -748,7 +711,7 @@ Note: `Settings Blur` is stored as local app UI state (UserDefaults) and is not 
 - `Cmd+P` / `Cmd+Shift+P`: toggle pick / clear picked set
 - `Cmd+I` (`Ctrl+I` on Linux, Windows): paste the selected clipboard history item into the app you came from
 - `Cmd+D`: remove the selected clipboard history item; otherwise move selected file/folder (or picked items) to Trash, or empty the pinned Trash folder
-- `Cmd+Shift+,`: toggle settings panel
+- `Cmd+,`: toggle settings window
 - `Cmd+Shift+R` / `Cmd+Shift+;` (macOS) / `Ctrl+Shift+R` / `Ctrl+Shift+;` (Linux, Windows): reload config, re-read your declared sources, and re-read `super-actions.toml` (`~/.config/look` or `~/.look`) so the strip can be arranged while you look at it
 - `Cmd+Shift+H`: hide the selected app from Look
 - `Cmd+-`, `Cmd+=`, `Cmd+0`: temporary UI zoom out/in/reset

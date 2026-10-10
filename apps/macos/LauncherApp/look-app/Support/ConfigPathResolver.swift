@@ -9,6 +9,25 @@ private func look_config_path(_ dev: Bool) -> UnsafeMutablePointer<CChar>?
 nonisolated
 private func look_free_config_cstring(_ ptr: UnsafeMutablePointer<CChar>?)
 
+@_silgen_name("look_config_values_json")
+nonisolated
+private func look_config_values_json() -> UnsafeMutablePointer<CChar>?
+
+@_silgen_name("look_config_set_value")
+nonisolated
+private func look_config_set_value(
+    _ section: UnsafePointer<CChar>?,
+    _ key: UnsafePointer<CChar>?,
+    _ rawVal: UnsafePointer<CChar>?
+) -> Bool
+
+@_silgen_name("look_config_remove_value")
+nonisolated
+private func look_config_remove_value(
+    _ section: UnsafePointer<CChar>?,
+    _ key: UnsafePointer<CChar>?
+) -> Bool
+
 enum ConfigPathResolver {
     private static let productionBundleIdentifier = "noah-code.Look"
 
@@ -66,5 +85,42 @@ enum ConfigPathResolver {
 
         let resolved = resolvedPath()
         setenv("LOOK_CONFIG_PATH", resolved, 1)
+    }
+
+    /// Loads the active configuration as a flat [key: value] map parsed by the Rust engine.
+    /// If there is a parse error, it's captured in `["_error": message]`.
+    static func loadFlatConfig() -> [String: String] {
+        guard let ptr = look_config_values_json() else {
+            return [:]
+        }
+        defer { look_free_config_cstring(ptr) }
+        let jsonStr = String(cString: ptr)
+        guard let data = jsonStr.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
+            return [:]
+        }
+        return dict
+    }
+
+    /// Sets a value in a section of the active configuration file.
+    @discardableResult
+    static func setConfigValue(section: String, key: String, rawValue: String) -> Bool {
+        section.withCString { secPtr in
+            key.withCString { keyPtr in
+                rawValue.withCString { valPtr in
+                    look_config_set_value(secPtr, keyPtr, valPtr)
+                }
+            }
+        }
+    }
+
+    /// Removes a key from a section of the active configuration file.
+    @discardableResult
+    static func removeConfigValue(section: String, key: String) -> Bool {
+        section.withCString { secPtr in
+            key.withCString { keyPtr in
+                look_config_remove_value(secPtr, keyPtr)
+            }
+        }
     }
 }

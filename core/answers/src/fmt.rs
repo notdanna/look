@@ -19,6 +19,22 @@ pub fn format_number(value: f64) -> String {
     group_thousands(&trimmed)
 }
 
+/// Formats `value` for unit conversions: up to 6 fraction digits so values like
+/// 1.024 GB or 0.001 kg keep their precision, trailing zeros trimmed, thousands grouped.
+pub fn format_unit_number(value: f64) -> String {
+    let decimals = 6;
+    let fixed = format!("{:.*}", decimals, value);
+    let trimmed = if fixed.contains('.') {
+        fixed
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
+    } else {
+        fixed
+    };
+    group_thousands(&trimmed)
+}
+
 /// Renders an amount for an API query param: integer form when whole, else the
 /// plain decimal (no grouping). E.g. `1`, `2.5`.
 pub fn query_amount(value: f64) -> String {

@@ -91,11 +91,7 @@ enum PomoPersistence {
     }
 
     static func load() -> Snapshot {
-        let path = ConfigPathResolver.resolvedPath()
-        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
-            return Snapshot(sessions: PomoCommand.defaultSessions(), timerStyle: .modern, musicFolderPath: nil)
-        }
-        let kv = ConfigFileLines.keyValues(raw)
+        let kv = ConfigPathResolver.loadFlatConfig()
         let sessions = kv[sessionsKey].flatMap(decodeSessions) ?? PomoCommand.defaultSessions()
         let style = kv[timerStyleKey].flatMap(PomoTimerStyle.init(rawValue:)) ?? .modern
         let folder = kv[musicFolderKey]?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -107,25 +103,13 @@ enum PomoPersistence {
     }
 
     static func save(_ snapshot: Snapshot) {
-        let path = ConfigPathResolver.resolvedPath()
-        var lines: [String] = []
-        if FileManager.default.fileExists(atPath: path) {
-            // Only the pomo keys are upserted below, so writing on top of a failed read
-            // would truncate the whole config to those few lines. A config we cannot
-            // read is one we must not overwrite.
-            guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
-                return
-            }
-            lines = ConfigFileLines.parse(raw)
-        }
-        ConfigFileLines.upsert(&lines, key: sessionsKey, value: encodeSessions(snapshot.sessions))
-        ConfigFileLines.upsert(&lines, key: timerStyleKey, value: snapshot.timerStyle.rawValue)
+        ConfigPathResolver.setConfigValue(section: "pomo", key: "sessions", rawValue: encodeSessions(snapshot.sessions))
+        ConfigPathResolver.setConfigValue(section: "pomo", key: "timer_style", rawValue: snapshot.timerStyle.rawValue)
         if let folder = snapshot.musicFolderPath, !folder.isEmpty {
-            ConfigFileLines.upsert(&lines, key: musicFolderKey, value: folder)
+            ConfigPathResolver.setConfigValue(section: "pomo", key: "music_folder", rawValue: folder)
         } else {
-            ConfigFileLines.remove(&lines, key: musicFolderKey)
+            ConfigPathResolver.removeConfigValue(section: "pomo", key: "music_folder")
         }
-        try? ConfigFileLines.render(lines).write(toFile: path, atomically: true, encoding: .utf8)
     }
 
     // ── Encoding ────────────────────────────────────────────────────────

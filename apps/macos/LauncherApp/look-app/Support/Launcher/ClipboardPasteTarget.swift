@@ -23,11 +23,10 @@ enum ClipboardPasteTarget: Equatable {
     /// Mirrors `DeleteTargetLogic.allowsKeyboardDelete`: a selection hidden
     /// behind another surface must not be acted on.
     static func allowsKeyboardPaste(
-        showsThemeSettings: Bool,
         showsHelpScreen: Bool,
         inCommandMode: Bool,
         inAIMode: Bool
     ) -> Bool {
-        !showsThemeSettings && !showsHelpScreen && !inCommandMode && !inAIMode
+        !showsHelpScreen && !inCommandMode && !inAIMode
     }
 }

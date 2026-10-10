@@ -4,11 +4,7 @@ import SwiftUI
 extension LauncherView {
     @ViewBuilder
     var themedBackground: some View {
-        // Settings panel is rendered as an overlay over command mode
-        // (via appUIState.showsThemeSettings) without flipping
-        // isCommandMode. It needs the full themed bg, so prefer the
-        // settings condition over the command-mode one.
-        if isCommandMode && !appUIState.showsThemeSettings {
+        if isCommandMode {
             // Command mode renders dynamic content (pomo timer, sys
             // refresh) with brightly-colored controls (Pause = warning
             // yellow, Reset = danger red, etc.). NSVisualEffectView with
@@ -26,8 +22,7 @@ extension LauncherView {
         } else {
             ThemedBackdrop(
                 themeStore: themeStore,
-                blurOpacityMultiplier: appUIState.showsThemeSettings
-                    ? themeStore.settings.settingsBlurMultiplier : 1.0,
+                blurOpacityMultiplier: 1.0,
                 blendingMode: .behindWindow,
                 cornerRadius: themeStore.panelRadius
             )

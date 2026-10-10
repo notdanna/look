@@ -10,6 +10,7 @@ final class GlobalHotKeyManager {
     // (they're Carbon/AppKit handles - not actually Sendable, but they're
     // only mutated from MainActor anyway).
     nonisolated(unsafe) private var hotKeyRef: EventHotKeyRef?
+    nonisolated(unsafe) private var clipboardHotKeyRef: EventHotKeyRef?
     nonisolated(unsafe) private var eventHandler: EventHandlerRef?
     // Carbon's RegisterEventHotKey only fires when the registering app is
     // NOT the currently-active app. When Look is in the foreground (e.g.
@@ -40,6 +41,9 @@ final class GlobalHotKeyManager {
     deinit {
         if let hotKeyRef {
             UnregisterEventHotKey(hotKeyRef)
+        }
+        if let clipboardHotKeyRef {
+            UnregisterEventHotKey(clipboardHotKeyRef)
         }
         if let eventHandler {
             RemoveEventHandler(eventHandler)
@@ -75,6 +79,17 @@ final class GlobalHotKeyManager {
         )
         hotkeyLog.notice("RegisterEventHotKey status=\(registerStatus) (noErr=0; -9878=hotkey already in use)")
 
+        let clipboardHotKeyId = EventHotKeyID(signature: fourCharCode("LOOK"), id: 2)
+        let clipboardStatus = RegisterEventHotKey(
+            CarbonHotkey.clipboard.keyCode,
+            CarbonHotkey.clipboard.carbonModifiers,
+            clipboardHotKeyId,
+            GetEventDispatcherTarget(),
+            0,
+            &clipboardHotKeyRef
+        )
+        hotkeyLog.notice("RegisterEventHotKey (clipboard) status=\(clipboardStatus)")
+
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         var status = registerStatus
         if status == noErr {
@@ -94,10 +109,17 @@ final class GlobalHotKeyManager {
                     )
                     guard status == noErr else { return noErr }
 
-                    if hotKeyId.signature == fourCharCode("LOOK"), hotKeyId.id == 1 {
-                        hotkeyLog.notice("CARBON hotkey fired (app active=\(NSApp.isActive))")
-                        DispatchQueue.main.async {
-                            NotificationCenter.default.post(name: .lookToggleWindowRequested, object: nil)
+                    if hotKeyId.signature == fourCharCode("LOOK") {
+                        if hotKeyId.id == 1 {
+                            hotkeyLog.notice("CARBON toggle hotkey fired (app active=\(NSApp.isActive))")
+                            DispatchQueue.main.async {
+                                NotificationCenter.default.post(name: .lookToggleWindowRequested, object: nil)
+                            }
+                        } else if hotKeyId.id == 2 {
+                            hotkeyLog.notice("CARBON clipboard hotkey fired (app active=\(NSApp.isActive))")
+                            DispatchQueue.main.async {
+                                NotificationCenter.default.post(name: .lookOpenClipboardRequested, object: nil)
+                            }
                         }
                     }
                     return noErr
@@ -132,6 +154,11 @@ final class GlobalHotKeyManager {
                 NotificationCenter.default.post(name: .lookToggleWindowRequested, object: nil)
                 return nil   // consume - don't let any field eat the space
             }
+            if CarbonHotkey.clipboard.matches(event) {
+                hotkeyLog.notice("LOCAL monitor clipboard fired (app active=\(NSApp.isActive))")
+                NotificationCenter.default.post(name: .lookOpenClipboardRequested, object: nil)
+                return nil
+            }
             return event
         }
     }
@@ -163,6 +190,11 @@ final class GlobalHotKeyManager {
         if let hotKeyRef {
             UnregisterEventHotKey(hotKeyRef)
             self.hotKeyRef = nil
+        }
+
+        if let clipboardHotKeyRef {
+            UnregisterEventHotKey(clipboardHotKeyRef)
+            self.clipboardHotKeyRef = nil
         }
 
         if let eventHandler {

@@ -9,27 +9,11 @@ final class DeleteTargetLogicTests: XCTestCase {
     // MARK: - shortcut routing
 
     func testCmdDIsDisabledWhileAnotherLauncherSurfaceIsVisible() {
-        XCTAssertFalse(
-            DeleteTargetLogic.allowsKeyboardDelete(
-                showsThemeSettings: true,
-                showsHelpScreen: false
-            )
-        )
-        XCTAssertFalse(
-            DeleteTargetLogic.allowsKeyboardDelete(
-                showsThemeSettings: false,
-                showsHelpScreen: true
-            )
-        )
+        XCTAssertFalse(DeleteTargetLogic.allowsKeyboardDelete(showsHelpScreen: true))
     }
 
     func testCmdDIsEnabledForTheNormalResultsSurface() {
-        XCTAssertTrue(
-            DeleteTargetLogic.allowsKeyboardDelete(
-                showsThemeSettings: false,
-                showsHelpScreen: false
-            )
-        )
+        XCTAssertTrue(DeleteTargetLogic.allowsKeyboardDelete(showsHelpScreen: false))
     }
 
     func testCmdDRemovesClipboardHistoryRows() {

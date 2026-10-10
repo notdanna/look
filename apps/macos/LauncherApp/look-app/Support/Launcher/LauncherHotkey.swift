@@ -51,6 +51,13 @@ struct CarbonHotkey: Equatable {
         display: "Cmd+Space"
     )
 
+    static let clipboard = CarbonHotkey(
+        keyCode: UInt32(kVK_ANSI_V),
+        carbonModifiers: UInt32(cmdKey | shiftKey),
+        eventModifiers: [.command, .shift],
+        display: "Cmd+Shift+V"
+    )
+
     /// Keyed by core's modifier names, which its grammar also accepts.
     fileprivate static let modifiers: [String: (carbon: Int, flag: NSEvent.ModifierFlags)] = [
         "command": (cmdKey, .command),

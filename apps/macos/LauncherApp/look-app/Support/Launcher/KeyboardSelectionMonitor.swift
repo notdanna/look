@@ -103,6 +103,22 @@ final class KeyboardSelectionMonitor {
                 "down keyCode=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "") flagsRaw=\(flags.rawValue) inCommand=\(inCommandMode())"
             )
 
+            // Standard macOS ⌘Q quits the application
+            if flags == [.command],
+               event.charactersIgnoringModifiers?.lowercased() == "q" || event.keyCode == 12
+            {
+                NSApplication.shared.terminate(nil)
+                return nil
+            }
+
+            // Standard macOS ⌘, or ⌘⇧, opens config file directly
+            if (flags == [.command] || flags == [.command, .shift]),
+               event.charactersIgnoringModifiers == "," || event.keyCode == 43
+            {
+                ThemeStore.shared.openConfigFile()
+                return nil
+            }
+
             // Modal: eats what it does not recognise so no shortcut can act on a
             // selection mid-hide. Cmd+Q is exempt, a prompt must not trap the user.
             if hideAppConfirmationActive() {
@@ -240,6 +256,13 @@ final class KeyboardSelectionMonitor {
                 let onToggleSessionLayout
             {
                 onToggleSessionLayout()
+                return nil
+            }
+
+            if (event.keyCode == KeyCode.v || event.charactersIgnoringModifiers?.lowercased() == "v")
+                && flags == [.command, .shift]
+            {
+                NotificationCenter.default.post(name: .lookOpenClipboardRequested, object: nil)
                 return nil
             }
 

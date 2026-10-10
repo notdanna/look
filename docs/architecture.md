@@ -6,12 +6,9 @@ It intentionally merges architecture explanation and diagrams into one place, so
 
 ## 1) System overview and design intent
 
-`look` is a keyboard-first launcher (shipping on macOS, Windows, and Linux) designed for low-latency local search. The architecture separates UI concerns from search/index/ranking concerns (Rust), joined through a small FFI/command boundary. The UI layer is platform-specific:
+`look` is a keyboard-first launcher for macOS designed for low-latency local search. The architecture separates UI concerns from search/index/ranking concerns (Rust), joined through a small C ABI boundary (`bridge/ffi`):
 
 - **macOS:** Swift / AppKit / SwiftUI under `apps/macos/LauncherApp/` (Xcode project), talking to the Rust core via the C ABI (`bridge/ffi`).
-- **Windows + Linux:** Tauri 2 shell with a vanilla HTML/CSS/JS frontend under `apps/linows/` (`lookapp`), talking to the Rust core via Tauri commands. The macOS SwiftUI app is the design source of truth.
-
-Every shell talks to the same Rust core, so search, indexing, ranking, and storage behave identically across platforms.
 
 Key design goals:
 
@@ -59,15 +56,15 @@ flowchart LR
 - `Themes/`: builtin theme presets (Catppuccin, Tokyo Night, Rose Pine, Gruvbox, Dracula, Kanagawa, Kindle, Liquid) and semantic color tokens
 - `Support/UI/`: shared UI primitives - `Motion` (all animation constants and the reveal modifiers), `ToggleSwitch`, `HoverTooltip`, `HoverBubble`
 - `bridge/ffi`: narrow C ABI surface for search, usage recording, config reload, translation, todo load/save, speed test, and error payloads.
-- `core/answers`: platform-agnostic, network-backed "web answer" lookups shared by every shell (macOS via `bridge/ffi`, Windows/Linux via Tauri commands). Instant answers (currency/weather/crypto), search suggestions, knowledge sources, and translation. Best-effort and panic-free: every entry point returns "no answer" on failure, with cheap network-free pattern-gating (`has_match`) so callers can fire speculatively while typing. No async runtime - HTTP is a blocking `curl` subprocess.
-- `core/ai`: the AI brain - one place for prompts, parsers, and precedence so they cannot drift as tiers are added. The routing ladder (`route.rs`), the planner prompt/aliases/mapping (`planner.rs`, `plan.rs`), tool resolution with the ambiguity gate, dates, previews, and undo recipes (`resolve.rs`), the `@` grammar (`explicit.rs`), the date/word lexicon and window grammar (`lexicon.rs`, `window.rs`), natural-language file recall (`files.rs`), clipboard text-ops, conversations and long-term memory (crash-safe JSON stores), markdown segmentation, and the streamed chat transport (`chat.rs`: a curl child plus a reader thread, polled by the shell - chosen because polling crosses a C ABI without an async runtime). Data-only across the boundary: JSON in, JSON out, no closures. **The AI surface is macOS-only and no linows AI is being built** (wanted on Linux/Windows? open an issue - but local inference needs hardware those machines may not have, and Linux has no unified system calendar); the crate is Rust so the logic is testable without a UI and prompts/parsers live in one place, not because a port is scheduled. See `docs/ai-architecture.md`.
+- `core/answers`: platform-agnostic, network-backed "web answer" lookups (reached via `bridge/ffi`). Instant answers (currency/weather/crypto), search suggestions, knowledge sources, and translation. Best-effort and panic-free: every entry point returns "no answer" on failure, with cheap network-free pattern-gating (`has_match`) so callers can fire speculatively while typing. No async runtime - HTTP is a blocking `curl` subprocess.
+- `core/ai`: the AI brain - one place for prompts, parsers, and precedence so they cannot drift as tiers are added. The routing ladder (`route.rs`), the planner prompt/aliases/mapping (`planner.rs`, `plan.rs`), tool resolution with the ambiguity gate, dates, previews, and undo recipes (`resolve.rs`), the `@` grammar (`explicit.rs`), the date/word lexicon and window grammar (`lexicon.rs`, `window.rs`), natural-language file recall (`files.rs`), clipboard text-ops, conversations and long-term memory (crash-safe JSON stores), markdown segmentation, and the streamed chat transport (`chat.rs`: a curl child plus a reader thread, polled by the shell - chosen because polling crosses a C ABI without an async runtime). Data-only across the boundary: JSON in, JSON out, no closures. The AI surface is native to macOS; the crate is Rust so the logic is testable without a UI and prompts/parsers live in one place. See `docs/ai-architecture.md`.
 - `core/sources`: user-declared source blocks. Parsing (`def.rs`), reading the sources directory (`load.rs`), turning a block into rows (`collect.rs`, `rows.rs`), performing steps through the user's login shell with shell-escaped placeholder substitution (`run.rs`), and the block-verb-before-preferred-tool rule (`tools.rs`). Parsing and collection are pure; process execution is the shell's seam, so a `run` block's command is spawned by the shell and its rows handed back through `core/engine`'s row cache. `example.toml` is the annotated format reference, asserted against the parser by a test. See `docs/user-sources.md`.
 - `core/indexing`: candidate model and indexing helpers used by engine/storage flows.
 - `core/matching`: exact/prefix/fuzzy matching primitives.
 - `core/ranking`: ranking helpers (usage/recency-aware adjustments and score composition).
 - `core/storage`: SQLite integration, schema/migrations, candidate/usage persistence.
-- `core/todo`: shared store for the `/todo` command. Owns the `todo_tasks` table inside the app's existing `look.db` (full-set load/save, one-year retention). macOS reaches it via `bridge/ffi`, linows via its Tauri command layer. `examples/seed.rs` fills a dev database with demo history, including near-today extension-window cases for `/todo` UI testing.
-- `core/netspeed`: the `/speed` measurement, shared by every shell. A latency probe (the best of several TCP handshakes against a pre-resolved address, rather than a subtraction of two of curl's cumulative timers, whose order is not portable across curl builds), download and upload phases (four parallel `curl` streams each), and the plain-language verdicts and display strings both shells print, so a reading reads identically everywhere. Cloudflare's keyless endpoints are the primary source; when they rate-limit a connection the download phase falls back to the nearest of several public test mirrors, ranked by a round-trip probe. No async runtime, and every phase is timeout-bounded. macOS reaches it via `bridge/ffi`, linows via its Tauri command layer.
+- `core/todo`: shared store for the `/todo` command. Owns the `todo_tasks` table inside the app's existing `look.db` (full-set load/save, one-year retention). macOS reaches it via `bridge/ffi`. `examples/seed.rs` fills a dev database with demo history, including near-today extension-window cases for `/todo` UI testing.
+- `core/netspeed`: the `/speed` measurement. A latency probe (the best of several TCP handshakes against a pre-resolved address, rather than a subtraction of two of curl's cumulative timers, whose order is not portable across curl builds), download and upload phases (four parallel `curl` streams each), and plain-language verdicts and display strings. Cloudflare's keyless endpoints are the primary source; when they rate-limit a connection the download phase falls back to the nearest of several public test mirrors, ranked by a round-trip probe. No async runtime, and every phase is timeout-bounded. macOS reaches it via `bridge/ffi`.
 - `core/engine`: query parsing, indexing orchestration, scoring, top-k retrieval, in-memory cache management.
 
 ```mermaid
@@ -164,7 +161,7 @@ Runtime refresh triggers:
   - `true`: run only when dirty,
   - `false`: run on every launcher open request.
 
-Watcher policy (linows, see `apps/linows/src-tauri/src/state.rs`):
+Watcher policy:
 
 - **apps roots** (`/usr/share/applications`, `~/.local/share/applications`, `XDG_DATA_DIRS/applications`) - watched **recursively** (small directories, cheap),
 - **file roots** (`~/Documents`, `~/Downloads`, `~/Desktop`, `file_scan_extra_roots`) - watched **non-recursively** to bound inotify watch count on large trees; deep-tree changes reconciled on next launcher-open refresh,
@@ -398,72 +395,6 @@ transparent, so that renders as nearly nothing. The view also draws nothing
 without a `contentView`, and the theme tint is passed into its `tintColor`
 rather than layered over it, since a colour wash on top cancels the refraction.
 
-On linows the same presets live in `apps/linows/src/css/theme.css`, one
-`:root[data-theme="…"]` block per preset, with `js/screens/settings.js`
-mirroring the raw slider values in `THEME_PRESETS` (tint, text and border are
-also written as inline custom properties, so both sides must agree). Appearance
-is not a flag there: a light preset flips the `--lift` / `--shadow` RGB
-triplets that stand chips off the backdrop and seat panes on it, and repaints
-the semantic tokens the dark presets inherit from `:root`. Opacities are the
-user's (`USER_CONTROLLED_KEYS`) except at one moment: picking a preset whose
-surface *is* its transparency snaps tint/text/border opacity back to the preset
-(`OPACITY_OWNING_THEMES`), because paper at a dark theme's transparency doesn't
-read as paper and glass at a near-opaque one is a blue panel. The switch
-persists those values, so restore paths stay dumb and the sliders are the
-user's again from the next drag. Kindle's font stack stays in CSS and applies
-while the Font field is left at `system-ui`; an explicit font still wins.
-
-The surface axis ports as `data-surface="liquid"` on the document element,
-beside `data-theme`, with `css/liquid.css` carrying it. It is stored under its
-own config key (`ui_surface`) rather than derived from the theme name, for the
-same reason macOS resolves it from `ui_blur_material` first: nudging any slider
-drops `ui_theme` to `custom`, and the surface must not go with it. The radius
-scale is one custom property (`--surface-radius-scale`) that every themed radius
-multiplies through - `--corner-radius`, `--control-radius`, `--tile-radius`,
-`--bar-radius` - so a radius that skips the scale is a rule that hardcodes a px
-value, not a call site that forgot a helper.
-
-The material itself does not port. `backdrop-filter` blurs what the web engine
-composited behind the element, and the desktop behind a `transparent: true`
-window is composited by the OS, outside the webview; refraction has no CSS
-primitive at all. So linows renders Liquid as clear glass rather than frost:
-high transparency, a specular rim drawn as an overlay pseudo-element (above the
-tint and the background image, and a hairline whatever the user's border
-thickness), and saturated accents. Nothing in it needs the compositor, so it
-looks the same everywhere, and it mirrors macOS 26 shipping `Glass.clear`
-beside `Glass.regular`.
-
-Real frost is available where the compositor grants it, and only there.
-`platform/linux/blur.rs` asks: on Wayland through `ext-background-effect-v1`
-(the cross-desktop staging protocol - KWin 6.7+, Mutter 51+, Hyprland 0.56+, Niri) falling
-back to `org_kde_kwin_blur`, which Plasma spoke until 6.7; on X11 through the
-`_KDE_NET_WM_BLUR_BEHIND_REGION` property, which only KWin reads. The Wayland
-bind (`blur_wayland.rs`) attaches to GTK's own `wl_surface`, taken off the
-window handle rather than through GDK FFI, and runs on a private event queue so
-its roundtrips do not eat the events GDK is waiting for.
-
-The Wayland request does not currently reach a native Wayland session: the
-`set_blur_region` command is gated on the X11 window id, which nothing caches
-when the window is not an X11 one, so the frost there is CSS only. Lifting that
-gate is not enough on its own, and the notes below are what a second attempt
-needs. GTK destroys the `wl_surface` on hide and makes a new one on the next
-show, so the effect object bound at startup goes inert and the next
-`set_blur_region` is a fatal `surface_destroyed` error, not a no-op: the object
-has to be re-attached per surface. The region is double-buffered state applied
-on the next surface commit, so a settled UI never publishes it. And
-`getBoundingClientRect` reports the *animated* box, so a region built during the
-entrance cascade is a hard-edged rectangle of frost sitting where the tile is
-not, over a part of the window that paints nothing.
-
-Two things follow from that being a capability rather than a setting. The
-region comes from the frontend (`js/blur.js`), because only it knows which
-surfaces are painted: one rectangle for the classic panel, one per tile once
-the panes float, so the gaps stay clear instead of frosting into a single slab.
-Both backends take rectangles only, so a rounded surface is approximated by the
-cross of its two inset rects. And no config key is added: `PlatformInfo`
-carries `compositor_blur`, which is what lets `effectiveBlurOpacity()` treat a
-blurring compositor the same way it treats a background image, so the existing
-Blur Style and Blur Opacity controls act on real frost when there is any.
 
 ### Motion
 
@@ -499,45 +430,6 @@ Panel arrival is a content-layer effect, not a window one: animating the window
 would mean touching the `makeKeyAndOrderFront` path that the Cmd+Space
 cold-login bug lives in. Reduce Motion is honoured by every modifier.
 
-On linows the same pass lives in `src/css/motion.css`: one `:root` block of
-tokens (durations, offsets, stagger, the house curve) and the keyframes that
-read them, driven by classes rather than a token counter. `js/motion.js` toggles
-`is-entering` on `.launcher-window` on every summon, which cascades the panel
-arrival, the top bar, the placeholder overlay and the running-apps strip; the
-launchpad keeps its own replay (`components/superactions.js`) because it is
-built lazily. `window-shown` and `visibilitychange` both replay, and a short
-guard drops whichever lands second. The same stale-buffer problem macOS does not
-have is handled by arming the first frame on hide, so the frame the compositor
-presents on the next summon matches frame 0 instead of flashing and rewinding.
-Arming alone is not enough: the compositor keeps the last frame the webview
-*painted*, and a hide in the same tick leaves the revealed panel in that buffer.
-So every dismiss goes through `commands::hide_armed`, which emits
-`window-hidden` and holds the window until the frontend acks with `confirm_hide`
-from a double `requestAnimationFrame` - one frame to arm, the next to confirm it
-was painted. A 60 ms timer is the backstop for a webview that never answers.
-Each dismiss carries an id that `commands::show_launcher` clears, so a backstop
-or late ack from a dismiss the user undid can't hide the window again.
-
-Two constraints are tighter here than on macOS. Only `transform` and `opacity`
-are animated, since they are compositor-handled and animating `filter` /
-`backdrop-filter` tanks the frame rate on WebKitGTK. And the selection pill's
-zoom uses the `scale` property rather than a `transform` function, because
-`components/results.js` drives the pill's position through `transform` and an
-animation on the same property would take the glide over and land the pill
-without it.
-
-Motion has one off switch, `data-motion="off"` on `<html>`. `js/platform.js`
-sets it, for the `animations_enabled` config key (Settings > Appearance >
-Animations) and for `prefers-reduced-motion` alike, so the two cannot drift
-apart in the stylesheets; Windows is left out of the OS half, where the flag
-tracks the "best performance" visual-effects preset rather than motion
-sensitivity. The attribute drives one rule in `motion.css` that takes every
-duration and delay to near zero, near rather than `none` because the pressed
-and rejected states clear themselves on `animationend`. The blinking caret and
-the answer spinner are exempt: they report state, not movement. Anything that
-cannot be expressed in CSS reads `platform.reducesMotion()` instead, the smooth
-`scrollIntoView` behind the selection and the speed gauge's eased dial.
-
 ### Config File Integration
 
 All settings are persisted to `.look/config`:
@@ -548,8 +440,7 @@ All settings are persisted to `.look/config`:
 **Appearance:**
 - `ui_tint_red`, `ui_tint_green`, `ui_tint_blue`, `ui_tint_opacity` - background tint (0-1)
 - `ui_blur_material` - blur style (hudWindow, sidebar, menu, underWindowBackground, liquidGlass). `liquidGlass` renders through `NSGlassEffectView` and needs macOS 26; below that it falls back to `hudWindow`, and neither it nor the Liquid theme is offered as a new choice in Settings. A value already persisted stays selectable and is labelled as unsupported rather than being rewritten, since normalising it would destroy the setting for the same config on a newer machine.
-- `ui_blur_opacity` - blur opacity (0-1). On linows this thins the tint only when there is frost to thin: a background image, or a compositor granting behind-window blur. With neither it is ignored and Tint Opacity alone decides the window alpha.
-- `ui_surface` - linows only. How surfaces are drawn, as opposed to what colour they are: empty (classic) or `liquid`. Stored separately from `ui_theme` because nudging any slider rewrites that key to `custom`, and a customised Liquid must keep its glass.
+- `ui_blur_opacity` - blur opacity (0-1)
 - `ui_font_name`, `ui_font_size` - font settings
 - `ui_font_red`, `ui_font_green`, `ui_font_blue`, `ui_font_opacity` - text color (0-1)
 - `ui_border_thickness`, `ui_border_red`, `ui_border_green`, `ui_border_blue`, `ui_border_opacity` - border

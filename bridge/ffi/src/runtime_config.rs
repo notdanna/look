@@ -66,17 +66,22 @@ fn runtime_config() -> &'static Mutex<RuntimeConfig> {
 fn load_runtime_config() -> RuntimeConfig {
     let mut from_file: HashMap<String, String> = HashMap::new();
     if let Some(path) = look_engine::config_path::current().map(|resolved| resolved.path)
-        && let Ok(contents) = std::fs::read_to_string(path)
+        && let Ok(contents) = std::fs::read_to_string(&path)
     {
-        for raw_line in contents.lines() {
-            let line = raw_line.split('#').next().unwrap_or("").trim();
-            if line.is_empty() {
-                continue;
-            }
-            if let Some(split) = line.find('=') {
-                let key = line[..split].trim().to_string();
-                let value = line[split + 1..].trim().to_string();
-                from_file.insert(key, value);
+        let is_toml = path.to_string_lossy().ends_with(".toml") || contents.lines().any(|l| l.trim().starts_with('[') && l.trim().ends_with(']'));
+        if is_toml && let Ok(map) = look_engine::config_toml::toml_to_flat_map(&contents) {
+            from_file = map;
+        } else {
+            for raw_line in contents.lines() {
+                let line = raw_line.split('#').next().unwrap_or("").trim();
+                if line.is_empty() {
+                    continue;
+                }
+                if let Some(split) = line.find('=') {
+                    let key = line[..split].trim().to_string();
+                    let value = line[split + 1..].trim().to_string();
+                    from_file.insert(key, value);
+                }
             }
         }
     }

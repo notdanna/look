@@ -121,7 +121,6 @@ CI runs for pushes to `main` and for pull requests targeting `main`.
 - Rust jobs (`lint`, `test`, `cargo-audit`, release `build`) run only when Rust-related paths change
 - secrets scanning (`gitleaks`) always runs
 - macOS app build runs only for PRs to `main` when Swift files change
-- linows (Tauri) build runs when `apps/linows/**` or `core/**` changes
 - release-style Rust build artifacts run only on push to `main`
 
 ## Pull request checklist

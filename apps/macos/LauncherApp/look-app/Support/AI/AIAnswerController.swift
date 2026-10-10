@@ -67,23 +67,20 @@ final class AIAnswerController: ObservableObject {
     func update(query: String, resultCount: Int, aiEnabled: Bool, provider: AIProviderKind) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Warm the model the moment a query starts looking sentence-like (more
-        // than one word), so it's loaded by the time the user stops typing.
-        if aiEnabled, trimmed.contains(" ") {
+        // Warm the model only when an explicit question is being asked.
+        if aiEnabled, trimmed.hasSuffix("?") {
             router.prewarm(provider)
         }
 
-        // Triggers: an explicit question, a multi-word entity that matched
-        // nothing locally, or a pattern-gated instant source (weather, currency,
-        // crypto) - those carry their own narrow grammar.
+        // Triggers: an explicit question (ending with '?'), or a pattern-gated
+        // instant source (units, weather, currency, crypto) with its own grammar.
         let questionLike = Self.isQuestionLike(trimmed)
-        let orphanEntity = resultCount == 0 && Self.isEntityLookup(trimmed)
         let instant = EngineBridge.shared.instantAnswerMatches(trimmed)
         // Arithmetic already has its own pinned row - a numeric-heavy query like
         // "1011 * 20" would otherwise also read as an orphan entity and send a
         // stray Wikipedia lookup ("1011" resolving to some unrelated decade).
         let isCalc = EngineBridge.shared.calcInline(query: trimmed) != nil
-        guard aiEnabled, !isCalc, questionLike || orphanEntity || instant else {
+        guard aiEnabled, !isCalc, questionLike || instant else {
             cancel()
             return
         }
@@ -218,24 +215,11 @@ final class AIAnswerController: ObservableObject {
         }
     }
 
-    /// A cheap heuristic for "this looks like a question, not an app/file launch".
-    /// Keeps the model off the hot path for ordinary launches like "spotify".
+    /// A query only counts as a question when it ends with '?', keeping the AI
+    /// off the hot path for ordinary searches.
     static func isQuestionLike(_ text: String) -> Bool {
-        guard text.count >= 3 else { return false }
-        // An explicit question mark is the strongest signal - honour it even for
-        // short queries like "1+1=?".
-        if text.hasSuffix("?") { return true }
-
-        let words = text.split(whereSeparator: { $0 == " " || $0 == "\n" })
-        guard words.count >= 3 else { return false }
-
-        let starters: Set<String> = [
-            "how", "what", "what's", "whats", "why", "who", "when", "where", "which", "whose",
-            "can", "could", "should", "would", "is", "are", "am", "do", "does",
-            "did", "will", "explain", "tell", "give", "write", "summarize",
-            "summarise", "define", "translate", "convert", "calculate",
-        ]
-        return starters.contains(words[0].lowercased())
+        guard text.count >= 2 else { return false }
+        return text.hasSuffix("?")
     }
 
     /// A multi-word, reasonably long query that's likely a name/entity rather

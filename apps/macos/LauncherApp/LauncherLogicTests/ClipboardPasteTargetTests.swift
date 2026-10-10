@@ -56,23 +56,15 @@ final class ClipboardPasteTargetTests: XCTestCase {
     func testTheChordIsRefusedWhileAnotherSurfaceOwnsTheWindow() {
         XCTAssertTrue(
             ClipboardPasteTarget.allowsKeyboardPaste(
-                showsThemeSettings: false, showsHelpScreen: false, inCommandMode: false,
-                inAIMode: false))
+                showsHelpScreen: false, inCommandMode: false, inAIMode: false))
         XCTAssertFalse(
             ClipboardPasteTarget.allowsKeyboardPaste(
-                showsThemeSettings: true, showsHelpScreen: false, inCommandMode: false,
-                inAIMode: false))
+                showsHelpScreen: true, inCommandMode: false, inAIMode: false))
         XCTAssertFalse(
             ClipboardPasteTarget.allowsKeyboardPaste(
-                showsThemeSettings: false, showsHelpScreen: true, inCommandMode: false,
-                inAIMode: false))
+                showsHelpScreen: false, inCommandMode: true, inAIMode: false))
         XCTAssertFalse(
             ClipboardPasteTarget.allowsKeyboardPaste(
-                showsThemeSettings: false, showsHelpScreen: false, inCommandMode: true,
-                inAIMode: false))
-        XCTAssertFalse(
-            ClipboardPasteTarget.allowsKeyboardPaste(
-                showsThemeSettings: false, showsHelpScreen: false, inCommandMode: false,
-                inAIMode: true))
+                showsHelpScreen: false, inCommandMode: false, inAIMode: true))
     }
 }

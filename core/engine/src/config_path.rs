@@ -17,8 +17,10 @@ pub const ENV_CONFIG_PATH: &str = "LOOK_CONFIG_PATH";
 /// The home-relative locations, newest first. A dev build keeps its own pair so
 /// running Look Dev never edits the settings of the installed copy.
 pub const CONFIG_DIR: &str = ".look";
-pub const CONFIG_NAME: &str = "config";
-pub const DEV_CONFIG_NAME: &str = "config.dev";
+pub const CONFIG_NAME: &str = "config.toml";
+pub const DEV_CONFIG_NAME: &str = "config.dev.toml";
+pub const LEGACY_FLAT_CONFIG_NAME: &str = "config";
+pub const LEGACY_DEV_FLAT_CONFIG_NAME: &str = "config.dev";
 pub const LEGACY_CONFIG_NAME: &str = ".look.config";
 
 /// The XDG base directory for look configuration: `$XDG_CONFIG_HOME/look` or `~/.config/look`.
@@ -144,6 +146,28 @@ pub fn resolve_home_variant_scoped(
                 migrated: false,
             };
         }
+        // Check legacy flat dev configs
+        let xdg_dev_flat = xdg_dir.join(LEGACY_DEV_FLAT_CONFIG_NAME);
+        if xdg_dev_flat.exists() {
+            let target = xdg_dev.clone();
+            if migrate_flat(&xdg_dev_flat, &target, DEV_CONFIG_NAME).is_ok() {
+                return ResolvedConfig {
+                    path: target,
+                    migrated: true,
+                };
+            }
+        }
+        let dot_dev_flat = dot_dir.join(LEGACY_DEV_FLAT_CONFIG_NAME);
+        if dot_dev_flat.exists() {
+            let target = dot_dev.clone();
+            if migrate_flat(&dot_dev_flat, &target, DEV_CONFIG_NAME).is_ok() {
+                return ResolvedConfig {
+                    path: target,
+                    migrated: true,
+                };
+            }
+        }
+
         let target = if dot_dir.exists() && !xdg_dir.exists() {
             dot_dev
         } else {
@@ -155,7 +179,7 @@ pub fn resolve_home_variant_scoped(
         };
     }
 
-    // 1. XDG config (~/.config/look/config or $XDG_CONFIG_HOME/look/config)
+    // 1. Existing config.toml in XDG or ~/.look
     let xdg_config = xdg_dir.join(CONFIG_NAME);
     if xdg_config.exists() {
         return ResolvedConfig {
@@ -164,7 +188,6 @@ pub fn resolve_home_variant_scoped(
         };
     }
 
-    // 2. Existing ~/.look/config fallback
     let dot_config = dot_dir.join(CONFIG_NAME);
     if dot_config.exists() {
         return ResolvedConfig {
@@ -173,25 +196,50 @@ pub fn resolve_home_variant_scoped(
         };
     }
 
+    // 2. Existing flat `config` in XDG or ~/.look -> migrate to config.toml
+    let target = if dot_dir.exists() && !xdg_dir.exists() {
+        dot_config
+    } else {
+        xdg_config
+    };
+
+    let xdg_flat = xdg_dir.join(LEGACY_FLAT_CONFIG_NAME);
+    if xdg_flat.exists() {
+        if migrate_flat(&xdg_flat, &target, CONFIG_NAME).is_ok() {
+            return ResolvedConfig {
+                path: target,
+                migrated: true,
+            };
+        }
+        return ResolvedConfig {
+            path: xdg_flat,
+            migrated: false,
+        };
+    }
+
+    let dot_flat = dot_dir.join(LEGACY_FLAT_CONFIG_NAME);
+    if dot_flat.exists() {
+        if migrate_flat(&dot_flat, &target, CONFIG_NAME).is_ok() {
+            return ResolvedConfig {
+                path: target,
+                migrated: true,
+            };
+        }
+        return ResolvedConfig {
+            path: dot_flat,
+            migrated: false,
+        };
+    }
+
     // 3. Legacy ~/.look.config
     let legacy = home.join(LEGACY_CONFIG_NAME);
     if !legacy.exists() {
-        // A fresh install: If ~/.look already exists on disk, keep using it;
-        // otherwise default to standard XDG ~/.config/look/config.
-        let target = if dot_dir.exists() && !xdg_dir.exists() {
-            dot_config
-        } else {
-            xdg_config
-        };
         return ResolvedConfig {
             path: ensured(target),
             migrated: false,
         };
     }
 
-    // A symlinked config is someone's dotfile repo. Copying would turn it into
-    // a plain file and their repo edits would stop applying, so it is read
-    // where it lies and never moved.
     if fs::symlink_metadata(&legacy).is_ok_and(|meta| meta.file_type().is_symlink()) {
         return ResolvedConfig {
             path: legacy,
@@ -199,25 +247,15 @@ pub fn resolve_home_variant_scoped(
         };
     }
 
-    let target = if dot_dir.exists() && !xdg_dir.exists() {
-        dot_config
-    } else {
-        xdg_config
-    };
-
-    match migrate(&legacy, &target, CONFIG_NAME) {
+    match migrate_flat(&legacy, &target, CONFIG_NAME) {
         Ok(()) => ResolvedConfig {
             path: target,
             migrated: true,
         },
-        // Another process copied it while this one was resolving. Its file is
-        // the one to read, the same as if it had been there all along.
         Err(NotMigrated::AlreadyThere) => ResolvedConfig {
             path: target,
             migrated: false,
         },
-        // Moved once already, or the copy failed. Both files are kept and the
-        // folder one wins, so with none there the old file is what there is.
         Err(NotMigrated::KeepLegacy) => ResolvedConfig {
             path: legacy,
             migrated: false,
@@ -242,9 +280,7 @@ fn ensured(path: PathBuf) -> PathBuf {
     path
 }
 
-/// Copies the legacy file across and marks it, leaving the original in place so
-/// nothing is destroyed and a downgrade still finds its settings.
-fn migrate(legacy: &Path, current: &Path, name: &str) -> Result<(), NotMigrated> {
+fn migrate_flat(legacy: &Path, current: &Path, name: &str) -> Result<(), NotMigrated> {
     let contents = fs::read_to_string(legacy).map_err(|_| NotMigrated::KeepLegacy)?;
     if contents.starts_with(MOVED_NOTICE_PREFIX) {
         return Err(NotMigrated::KeepLegacy);
@@ -253,9 +289,9 @@ fn migrate(legacy: &Path, current: &Path, name: &str) -> Result<(), NotMigrated>
     if let Some(parent) = current.parent() {
         fs::create_dir_all(parent).map_err(|_| NotMigrated::KeepLegacy)?;
     }
-    // Create-new rather than write: two Look processes can resolve at the same
-    // moment, and the loser must not land a half-read copy on top of the
-    // winner's whole one.
+
+    let toml_contents = crate::config_toml::migrate_legacy_flat_to_toml(&contents);
+
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -264,7 +300,7 @@ fn migrate(legacy: &Path, current: &Path, name: &str) -> Result<(), NotMigrated>
             std::io::ErrorKind::AlreadyExists => NotMigrated::AlreadyThere,
             _ => NotMigrated::KeepLegacy,
         })?;
-    file.write_all(contents.as_bytes())
+    file.write_all(toml_contents.as_bytes())
         .map_err(|_| NotMigrated::KeepLegacy)?;
     let notice = format!("{MOVED_NOTICE_PREFIX}{name} - Look no longer reads this file.");
     fs::write(legacy, format!("{notice}\n\n{contents}")).map_err(|_| NotMigrated::KeepLegacy)
@@ -347,10 +383,8 @@ mod tests {
         let resolved = resolve_home(&home.0);
         assert_eq!(resolved.path, home.current());
         assert!(resolved.migrated);
-        assert_eq!(
-            fs::read_to_string(home.current()).unwrap(),
-            "ui_theme=dracula\n"
-        );
+        let migrated_contents = fs::read_to_string(home.current()).unwrap();
+        assert!(migrated_contents.contains("theme = \"dracula\""));
 
         // The original survives, so a downgrade still finds its settings, and
         // it says why editing it no longer does anything.
@@ -416,7 +450,7 @@ mod tests {
         fs::write(home.current(), "ui_theme=whole\n").unwrap();
 
         assert!(matches!(
-            migrate(&home.legacy(), &home.current(), CONFIG_NAME),
+            migrate_flat(&home.legacy(), &home.current(), CONFIG_NAME),
             Err(NotMigrated::AlreadyThere)
         ));
         assert_eq!(

@@ -9,7 +9,7 @@
 set -eu
 
 APP="${LOOK_DEV_APP:-/Applications/Look Dev.app}"
-CONFIG="${LOOK_DEV_CONFIG:-$HOME/.look/config.dev}"
+CONFIG="${LOOK_DEV_CONFIG:-$HOME/.look/config.dev.toml}"
 
 if [ ! -d "$APP" ]; then
     echo "lookdev: $APP is not installed. Run: make app-install-dev" >&2

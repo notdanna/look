@@ -26,30 +26,18 @@ enum WindowAutoScale {
     static let settingsBaseHeight: CGFloat = 620
 
     static var baseWidth: CGFloat {
-        if AppUIState.shared.showsThemeSettings {
-            return settingsBaseWidth
-        }
-        return CGFloat(max(ThemeStore.shared.settings.windowWidth, ThemeStore.shared.settings.searchBarWidth))
+        CGFloat(max(ThemeStore.shared.settings.windowWidth, ThemeStore.shared.settings.searchBarWidth))
     }
     static var baseHeight: CGFloat {
-        if AppUIState.shared.showsThemeSettings {
-            return settingsBaseHeight
-        }
-        return standardBaseHeight
+        standardBaseHeight
     }
 
     // Compact: tall enough for 6-7 rows. Mirrors COMPACT_W/H in the Linux/Windows build.
     static var compactBaseWidth: CGFloat {
-        if AppUIState.shared.showsThemeSettings {
-            return settingsBaseWidth
-        }
-        return CGFloat(max(min(ThemeStore.shared.settings.windowWidth, 680), ThemeStore.shared.settings.searchBarWidth))
+        CGFloat(max(min(ThemeStore.shared.settings.windowWidth, 680), ThemeStore.shared.settings.searchBarWidth))
     }
     static var compactBaseHeight: CGFloat {
-        if AppUIState.shared.showsThemeSettings {
-            return settingsBaseHeight
-        }
-        return 440
+        440
     }
 
     /// Extra points to lift the launcher above vertical center. The window is
@@ -67,9 +55,6 @@ enum WindowAutoScale {
     /// Base (unscaled) size of the launcher window. Running apps render inside
     /// the search bar, so the window is always the bordered-panel size.
     static func baseSize(for layout: LauncherLayout) -> CGSize {
-        if AppUIState.shared.showsThemeSettings {
-            return CGSize(width: settingsBaseWidth, height: settingsBaseHeight)
-        }
         switch layout {
         case .split: return CGSize(width: baseWidth, height: baseHeight)
         case .compact: return CGSize(width: compactBaseWidth, height: compactBaseHeight)

@@ -279,9 +279,8 @@ local-first promise intact for users who run nothing extra.
 2. Whether synthesis (LLM one-line answer over hits) ships in v1 or after raw
    ranked hits prove out.
 3. Vector search: confirm brute-force-cosine-first, defer any vector-store crate.
-4. macOS-only, like every other AI feature. linows AI is not being built;
-   users who want it should open an issue. Note embeddings need a local model,
-   so the hardware caveat applies there too.
+4. macOS-only, like every other AI feature. Note embeddings need a local model,
+   so the hardware caveat applies there.
 
 ## Recall phased plan
 
@@ -344,12 +343,7 @@ Platform matrix (the honest, uneven part):
 - **Linux**: no unified system calendar. GNOME via Evolution Data Server over
   D-Bus, KDE via Akonadi. Desktop-dependent and fragmented.
 
-Current position: **macOS-only**, and a Windows/Linux calendar backend is not
-being built. Not refused either - if a linows user asks for it, that is an
-issue worth having. But the matrix above is the reason to be honest in that
-conversation rather than optimistic: on Linux there is no unified store to
-write to at all, so "calendar acting on linows" may be a thinner feature than
-the macOS one no matter how much work goes in.
+Current position: **macOS-only**. Look targets macOS natively.
 
 ## Other apps that fit the same pattern
 

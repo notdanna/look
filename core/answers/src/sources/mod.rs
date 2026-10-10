@@ -6,6 +6,7 @@ mod crypto;
 mod currency;
 pub mod knowledge;
 pub mod suggest;
+pub mod units;
 mod weather;
 
 use crate::{parse, types::Answer};
@@ -15,6 +16,11 @@ use crate::{parse, types::Answer};
 /// resolve in order and return the first hit.
 pub fn instant(query: &str) -> Option<Answer> {
     let q = query.trim();
+    if let Some(u) = parse::units(q) {
+        if let Some(ans) = units::answer(&u) {
+            return Some(ans);
+        }
+    }
     if let Some(c) = parse::currency(q) {
         return currency::answer(&c);
     }
@@ -30,7 +36,7 @@ pub fn instant(query: &str) -> Option<Answer> {
 /// Whether any provider's pattern matches - network-free gate.
 pub fn has_match(query: &str) -> bool {
     let q = query.trim();
-    if parse::currency(q).is_some() || parse::crypto(q).is_some() {
+    if parse::units(q).is_some() || parse::currency(q).is_some() || parse::crypto(q).is_some() {
         return true;
     }
     // A bare `weather` only counts once some place has resolved this session.
